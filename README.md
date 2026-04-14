@@ -1,6 +1,13 @@
 # autofresh
 
-用于调度每日 `codex` 和 `claude` 保活 ping 的小型 Go 命令行工具。
+跨平台（macOS / Linux）的 Codex & Claude 用量保活工具。
+
+一个用 Go 写的小命令行工具，帮你**自动在工作时间内定时触发 Codex 和 Claude 的保活 ping**，把每个 5 小时计费窗口“卡”在你真正需要用的时段里，让有限的额度尽量都落在工作时间被你用上，而不是浪费在睡觉或下班时段。
+
+- 设定一个起始时间（比如早上 8:00），后续按固定 `5h10m` 间隔自动触发，不跨午夜
+- macOS 自动写入 `launchd`，Linux 自动写入 `crontab`，一条命令搞定
+- 内置 `plan` / `trigger` / `logs` / `doctor` 等命令，方便查看计划、手动触发和排查
+- Codex 走 `codex exec`，Claude 走 `claude -p`，纯保活 ping，不打扰你正常使用
 
 ## 编译
 
