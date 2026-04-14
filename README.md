@@ -31,14 +31,14 @@ go install ./cmd/autofresh
 ## 命令
 
 ```bash
-autofresh set 08:00 --target all
-autofresh plan
-autofresh trigger
-autofresh trigger --target codex
-autofresh logs
-autofresh logs -n 10
-autofresh doctor
-autofresh delete
+./autofresh set 08:00 --target all
+./autofresh plan
+./autofresh trigger
+./autofresh trigger --target codex
+./autofresh logs
+./autofresh logs -n 10
+./autofresh doctor
+./autofresh delete
 ```
 
 手动执行 `trigger` 会把模型回复打印到 stdout，便于确认保活确实触发了。`plan` 会显示当前 provider 对应的 model 和 prompt，`logs` 会记录每次触发使用的 model。
