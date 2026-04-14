@@ -10,6 +10,7 @@ import (
 type Entry struct {
 	Timestamp time.Time
 	Provider  string
+	Model     string
 	Mode      string
 	Result    string
 	Message   string
@@ -47,9 +48,10 @@ func (l *FileLogger) Log(entry Entry) error {
 	defer handle.Close()
 
 	line := fmt.Sprintf(
-		"%s provider=%s mode=%s result=%s message=%q\n",
+		"%s provider=%s model=%s mode=%s result=%s message=%q\n",
 		entry.Timestamp.Format(time.RFC3339),
 		entry.Provider,
+		entry.Model,
 		entry.Mode,
 		entry.Result,
 		entry.Message,

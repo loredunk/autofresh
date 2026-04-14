@@ -25,9 +25,16 @@ type ConfigStore interface {
 }
 
 type Platform interface {
-	Install(binaryPath string, pathValue string, times []schedule.TimeOfDay) error
+	Install(binaryPath string, envValues map[string]string, times []schedule.TimeOfDay) error
 	Remove() error
 	Status() (string, error)
+}
+
+var envSnapshotKeys = []string{
+	"PATH",
+	"HOME",
+	"HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "NO_PROXY",
+	"http_proxy", "https_proxy", "all_proxy", "no_proxy",
 }
 
 type Runner interface {
@@ -41,6 +48,7 @@ type Service struct {
 	Runner         Runner
 	ExecutablePath func() (string, error)
 	PathValue      func() string
+	EnvValues      func() map[string]string
 	LogPath        func() (string, error)
 }
 
@@ -98,11 +106,16 @@ func (s *Service) Set(startTime string, target string, out io.Writer) error {
 		return err
 	}
 
-	if err := s.Platform.Install(binaryPath, s.currentPathValue(), times); err != nil {
+	if err := s.Platform.Install(binaryPath, s.currentEnvValues(), times); err != nil {
 		return err
 	}
 
-	return printPlan(out, cfg, "installed", times)
+	commands, err := provider.BuildCommands(target)
+	if err != nil {
+		return err
+	}
+
+	return printPlan(out, cfg, "installed", times, commands)
 }
 
 func (s *Service) Delete(out io.Writer) error {
@@ -134,7 +147,12 @@ func (s *Service) Plan(out io.Writer) error {
 		return err
 	}
 
-	return printPlan(out, cfg, status, times)
+	commands, err := provider.BuildCommands(cfg.Target)
+	if err != nil {
+		return err
+	}
+
+	return printPlan(out, cfg, status, times, commands)
 }
 
 func (s *Service) Trigger(target string, out io.Writer) error {
@@ -248,8 +266,18 @@ func (s *Service) Logs(lines int, out io.Writer) error {
 	return err
 }
 
-func printPlan(out io.Writer, cfg config.Config, jobStatus string, times []schedule.TimeOfDay) error {
-	if _, err := fmt.Fprintf(out, "start time: %s\ntarget: %s\ntoday:\n", cfg.StartTime, cfg.Target); err != nil {
+func printPlan(out io.Writer, cfg config.Config, jobStatus string, times []schedule.TimeOfDay, commands []provider.Command) error {
+	if _, err := fmt.Fprintf(out, "start time: %s\ntarget: %s\nmodels:\n", cfg.StartTime, cfg.Target); err != nil {
+		return err
+	}
+
+	for _, command := range commands {
+		if _, err := fmt.Fprintf(out, "  - %s model=%s prompt=%q\n", command.Provider, command.Model, command.Prompt); err != nil {
+			return err
+		}
+	}
+
+	if _, err := fmt.Fprintln(out, "today:"); err != nil {
 		return err
 	}
 
@@ -286,6 +314,23 @@ func (s *Service) currentPathValue() string {
 		return os.Getenv("PATH")
 	}
 	return s.PathValue()
+}
+
+func (s *Service) currentEnvValues() map[string]string {
+	if s.EnvValues != nil {
+		return s.EnvValues()
+	}
+
+	values := map[string]string{"PATH": s.currentPathValue()}
+	for _, key := range envSnapshotKeys {
+		if key == "PATH" {
+			continue
+		}
+		if value, ok := os.LookupEnv(key); ok {
+			values[key] = value
+		}
+	}
+	return values
 }
 
 func (s *Service) currentLogPath() (string, error) {

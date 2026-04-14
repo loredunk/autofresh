@@ -2,12 +2,13 @@ package platform
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
-	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strings"
 
 	"autofresh/internal/schedule"
@@ -21,7 +22,7 @@ const (
 )
 
 type Installer interface {
-	Install(binaryPath string, pathValue string, times []schedule.TimeOfDay) error
+	Install(binaryPath string, envValues map[string]string, times []schedule.TimeOfDay) error
 	Remove() error
 	Status() (string, error)
 }
@@ -54,16 +55,26 @@ func (OSRunner) Run(name string, args []string, input string) (string, error) {
 	}
 
 	var stdout bytes.Buffer
+	var stderr bytes.Buffer
 	cmd.Stdout = &stdout
-	cmd.Stderr = io.Discard
+	cmd.Stderr = &stderr
 
 	err := cmd.Run()
-	return stdout.String(), err
+	if err == nil {
+		return stdout.String(), nil
+	}
+
+	summary := strings.TrimSpace(stderr.String())
+	if summary == "" {
+		return stdout.String(), err
+	}
+
+	return stdout.String(), errors.New(summary)
 }
 
-func BuildLaunchdPlist(binaryPath string, pathValue string, times []schedule.TimeOfDay) string {
+func BuildLaunchdPlist(binaryPath string, envValues map[string]string, times []schedule.TimeOfDay) string {
 	var builder strings.Builder
-	mergedPath := mergedPathValue(pathValue)
+	merged := mergedEnvValues(envValues)
 	builder.WriteString(`<?xml version="1.0" encoding="UTF-8"?>` + "\n")
 	builder.WriteString(`<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">` + "\n")
 	builder.WriteString(`<plist version="1.0">` + "\n")
@@ -77,8 +88,10 @@ func BuildLaunchdPlist(binaryPath string, pathValue string, times []schedule.Tim
 	builder.WriteString("\t</array>\n")
 	builder.WriteString("\t<key>EnvironmentVariables</key>\n")
 	builder.WriteString("\t<dict>\n")
-	builder.WriteString("\t\t<key>PATH</key>\n")
-	builder.WriteString("\t\t<string>" + mergedPath + "</string>\n")
+	for _, key := range sortedKeys(merged) {
+		builder.WriteString("\t\t<key>" + key + "</key>\n")
+		builder.WriteString("\t\t<string>" + merged[key] + "</string>\n")
+	}
 	builder.WriteString("\t</dict>\n")
 	builder.WriteString("\t<key>StartCalendarInterval</key>\n")
 	builder.WriteString("\t<array>\n")
@@ -94,16 +107,18 @@ func BuildLaunchdPlist(binaryPath string, pathValue string, times []schedule.Tim
 	return builder.String()
 }
 
-func BuildCronBlock(binaryPath string, pathValue string, times []schedule.TimeOfDay) string {
+func BuildCronBlock(binaryPath string, envValues map[string]string, times []schedule.TimeOfDay) string {
 	if binaryPath == "" || len(times) == 0 {
 		return ""
 	}
 
-	mergedPath := mergedPathValue(pathValue)
+	merged := mergedEnvValues(envValues)
 	var builder strings.Builder
 	builder.WriteString(cronStart)
 	builder.WriteString("\n")
-	builder.WriteString("PATH=" + mergedPath + "\n")
+	for _, key := range sortedKeys(merged) {
+		builder.WriteString(key + "=" + merged[key] + "\n")
+	}
 	for _, slot := range times {
 		builder.WriteString(fmt.Sprintf("%d %d * * * %s run >/dev/null 2>&1\n", slot.Minute, slot.Hour, binaryPath))
 	}
@@ -112,7 +127,7 @@ func BuildCronBlock(binaryPath string, pathValue string, times []schedule.TimeOf
 	return builder.String()
 }
 
-func RewriteCron(existing string, binaryPath string, pathValue string, times []schedule.TimeOfDay) string {
+func RewriteCron(existing string, binaryPath string, envValues map[string]string, times []schedule.TimeOfDay) string {
 	lines := strings.Split(existing, "\n")
 	filtered := make([]string, 0, len(lines))
 	skipping := false
@@ -136,8 +151,30 @@ func RewriteCron(existing string, binaryPath string, pathValue string, times []s
 		builder.WriteString(line)
 		builder.WriteString("\n")
 	}
-	builder.WriteString(BuildCronBlock(binaryPath, pathValue, times))
+	builder.WriteString(BuildCronBlock(binaryPath, envValues, times))
 	return builder.String()
+}
+
+func mergedEnvValues(envValues map[string]string) map[string]string {
+	out := make(map[string]string, len(envValues)+1)
+	for key, value := range envValues {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			continue
+		}
+		out[key] = value
+	}
+	out["PATH"] = mergedPathValue(out["PATH"])
+	return out
+}
+
+func sortedKeys(m map[string]string) []string {
+	keys := make([]string, 0, len(m))
+	for key := range m {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys
 }
 
 func mergedPathValue(pathValue string) string {

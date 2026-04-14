@@ -49,11 +49,11 @@ func TestBuildCommandForAll(t *testing.T) {
 		t.Fatalf("got %d commands", len(cmds))
 	}
 
-	if !slicesEqual(cmds[0].Args, []string{"exec", "--skip-git-repo-check", "--ephemeral", "ok"}) {
+	if !slicesEqual(cmds[0].Args, []string{"exec", "--model", "gpt-5.4-mini", "--skip-git-repo-check", "--ephemeral", "ok"}) {
 		t.Fatalf("unexpected codex args: %#v", cmds[0].Args)
 	}
 
-	if !slicesEqual(cmds[1].Args, []string{"-p", "ok"}) {
+	if !slicesEqual(cmds[1].Args, []string{"--model", "haiku", "-p", "ok"}) {
 		t.Fatalf("unexpected claude args: %#v", cmds[1].Args)
 	}
 }
@@ -70,7 +70,7 @@ func TestBuildCommandForClaudeUsesPrintMode(t *testing.T) {
 		t.Fatalf("got %d commands", len(cmds))
 	}
 
-	if !slicesEqual(cmds[0].Args, []string{"-p", "ok"}) {
+	if !slicesEqual(cmds[0].Args, []string{"--model", "haiku", "-p", "ok"}) {
 		t.Fatalf("unexpected claude args: %#v", cmds[0].Args)
 	}
 }
@@ -116,7 +116,8 @@ func TestRunnerReturnsRepliesForSuccessfulCommands(t *testing.T) {
 			"codex": "OK.",
 		},
 	}
-	runner := NewRunner(executor, &fakeLogger{})
+	logger := &fakeLogger{}
+	runner := NewRunner(executor, logger)
 
 	results, err := runner.Run(context.Background(), "codex", "manual")
 	if err != nil {
@@ -129,6 +130,14 @@ func TestRunnerReturnsRepliesForSuccessfulCommands(t *testing.T) {
 
 	if results[0].Reply != "OK." {
 		t.Fatalf("got reply %q", results[0].Reply)
+	}
+
+	if len(logger.entries) != 1 {
+		t.Fatalf("got %d log entries", len(logger.entries))
+	}
+
+	if logger.entries[0].Model != "gpt-5.4-mini" {
+		t.Fatalf("got model %q", logger.entries[0].Model)
 	}
 }
 

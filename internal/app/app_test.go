@@ -57,13 +57,13 @@ type fakePlatform struct {
 	status    string
 	times     []schedule.TimeOfDay
 	path      string
-	envPath   string
+	env       map[string]string
 }
 
-func (f *fakePlatform) Install(binaryPath string, envPath string, times []schedule.TimeOfDay) error {
+func (f *fakePlatform) Install(binaryPath string, envValues map[string]string, times []schedule.TimeOfDay) error {
 	f.installed = true
 	f.path = binaryPath
-	f.envPath = envPath
+	f.env = envValues
 	f.times = times
 	return nil
 }
@@ -108,8 +108,11 @@ func TestSetPersistsConfigAndInstallsJob(t *testing.T) {
 		ExecutablePath: func() (string, error) {
 			return "/tmp/autofresh", nil
 		},
-		PathValue: func() string {
-			return "/custom/bin:/usr/bin"
+		EnvValues: func() map[string]string {
+			return map[string]string{
+				"PATH":        "/custom/bin:/usr/bin",
+				"HTTPS_PROXY": "http://proxy.local:8080",
+			}
 		},
 	}
 
@@ -130,8 +133,12 @@ func TestSetPersistsConfigAndInstallsJob(t *testing.T) {
 		t.Fatalf("got %d times", len(platform.times))
 	}
 
-	if platform.envPath != "/custom/bin:/usr/bin" {
-		t.Fatalf("got env path %q", platform.envPath)
+	if platform.env["PATH"] != "/custom/bin:/usr/bin" {
+		t.Fatalf("got PATH %q", platform.env["PATH"])
+	}
+
+	if platform.env["HTTPS_PROXY"] != "http://proxy.local:8080" {
+		t.Fatalf("got HTTPS_PROXY %q", platform.env["HTTPS_PROXY"])
 	}
 }
 
@@ -163,6 +170,12 @@ func TestPlanPrintsTodaySchedule(t *testing.T) {
 
 	text := out.String()
 	for _, want := range []string{"08:00", "13:10", "18:20", "23:30"} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("missing %s in output %q", want, text)
+		}
+	}
+
+	for _, want := range []string{"codex model=gpt-5.4-mini", "claude model=haiku", "prompt=\"ok\""} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("missing %s in output %q", want, text)
 		}

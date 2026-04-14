@@ -15,6 +15,8 @@ import (
 
 type Command struct {
 	Provider string
+	Model    string
+	Prompt   string
 	Name     string
 	Args     []string
 }
@@ -68,26 +70,34 @@ func BuildCommands(target string) ([]Command, error) {
 	case "codex":
 		return []Command{{
 			Provider: "codex",
+			Model:    "gpt-5.4-mini",
+			Prompt:   "ok",
 			Name:     "codex",
-			Args:     []string{"exec", "--skip-git-repo-check", "--ephemeral", "ok"},
+			Args:     []string{"exec", "--model", "gpt-5.4-mini", "--skip-git-repo-check", "--ephemeral", "ok"},
 		}}, nil
 	case "claude":
 		return []Command{{
 			Provider: "claude",
+			Model:    "haiku",
+			Prompt:   "ok",
 			Name:     "claude",
-			Args:     []string{"-p", "ok"},
+			Args:     []string{"--model", "haiku", "-p", "ok"},
 		}}, nil
 	case "all":
 		return []Command{
 			{
 				Provider: "codex",
+				Model:    "gpt-5.4-mini",
+				Prompt:   "ok",
 				Name:     "codex",
-				Args:     []string{"exec", "--skip-git-repo-check", "--ephemeral", "ok"},
+				Args:     []string{"exec", "--model", "gpt-5.4-mini", "--skip-git-repo-check", "--ephemeral", "ok"},
 			},
 			{
 				Provider: "claude",
+				Model:    "haiku",
+				Prompt:   "ok",
 				Name:     "claude",
-				Args:     []string{"-p", "ok"},
+				Args:     []string{"--model", "haiku", "-p", "ok"},
 			},
 		}, nil
 	default:
@@ -176,7 +186,7 @@ func (r Runner) Run(ctx context.Context, target string, mode string) ([]Executio
 		if err != nil {
 			message := humanizeFailure(command, err, timeout)
 			failures = append(failures, message)
-			r.log(command.Provider, mode, "failure", message)
+			r.log(command.Provider, command.Model, mode, "failure", message)
 			continue
 		}
 
@@ -185,7 +195,7 @@ func (r Runner) Run(ctx context.Context, target string, mode string) ([]Executio
 		if logMessage == "" {
 			logMessage = "ok"
 		}
-		r.log(command.Provider, mode, "success", logMessage)
+		r.log(command.Provider, command.Model, mode, "success", logMessage)
 	}
 
 	if len(failures) > 0 {
@@ -199,7 +209,7 @@ func (r Runner) Available(name string) error {
 	return r.Executor.LookPath(name)
 }
 
-func (r Runner) log(provider string, mode string, result string, message string) {
+func (r Runner) log(provider string, model string, mode string, result string, message string) {
 	if r.Logger == nil {
 		return
 	}
@@ -207,6 +217,7 @@ func (r Runner) log(provider string, mode string, result string, message string)
 	_ = r.Logger.Log(logging.Entry{
 		Timestamp: time.Now(),
 		Provider:  provider,
+		Model:     model,
 		Mode:      mode,
 		Result:    result,
 		Message:   message,

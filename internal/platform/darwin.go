@@ -13,13 +13,13 @@ type Darwin struct {
 	Runner  CommandRunner
 }
 
-func (d Darwin) Install(binaryPath string, pathValue string, times []schedule.TimeOfDay) error {
+func (d Darwin) Install(binaryPath string, envValues map[string]string, times []schedule.TimeOfDay) error {
 	path := plistPath(d.HomeDir)
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
 
-	if err := os.WriteFile(path, []byte(BuildLaunchdPlist(binaryPath, pathValue, times)), 0o644); err != nil {
+	if err := os.WriteFile(path, []byte(BuildLaunchdPlist(binaryPath, envValues, times)), 0o644); err != nil {
 		return err
 	}
 

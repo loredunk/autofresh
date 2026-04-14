@@ -41,7 +41,7 @@ autofresh doctor
 autofresh delete
 ```
 
-手动执行 `trigger` 会把模型回复打印到 stdout，便于确认保活确实触发了。
+手动执行 `trigger` 会把模型回复打印到 stdout，便于确认保活确实触发了。`plan` 会显示当前 provider 对应的 model 和 prompt，`logs` 会记录每次触发使用的 model。
 
 ## 行为
 
@@ -50,5 +50,5 @@ autofresh delete
 - 时间不跨越午夜
 - macOS 使用 `launchd`
 - Linux 使用 `crontab`
-- Codex 保活使用 `codex exec --skip-git-repo-check --ephemeral "ok"`
-- Claude 保活使用 `claude -p "ok"`
+- Codex 保活使用 `codex exec --model gpt-5.4-mini --skip-git-repo-check --ephemeral "ok"`
+- Claude 保活使用 `claude --model haiku -p "ok"`
