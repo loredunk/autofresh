@@ -21,9 +21,6 @@ go build -o autofresh ./cmd/autofresh
 
 # 或直接运行
 go run ./cmd/autofresh
-
-# 安装到 $GOPATH/bin 或 $GOBIN
-go install ./cmd/autofresh
 ```
 
 要求 Go 1.22 或更高版本。
@@ -31,14 +28,14 @@ go install ./cmd/autofresh
 ## 命令
 
 ```bash
-./autofresh set 08:00 --target all
-./autofresh plan
-./autofresh trigger
-./autofresh trigger --target codex
-./autofresh logs
-./autofresh logs -n 10
-./autofresh doctor
-./autofresh delete
+./autofresh set 06:00 --target all   # 给claude和codex设置一天的第一次fresh定时
+./autofresh plan        # 查看当前计划
+./autofresh trigger     # 尝试用autofresh给codex和claude发送打招呼
+./autofresh trigger --target codex  # 用trigger给codex gpt5.4 mini发一个ok
+./autofresh logs        # 看所有的logs
+./autofresh logs -n 10    # 看 10 行logs
+./autofresh doctor    # 诊断当前计划
+./autofresh delete    # 删除计划
 ```
 
 手动执行 `trigger` 会把模型回复打印到 stdout，便于确认保活确实触发了。`plan` 会显示当前 provider 对应的 model 和 prompt，`logs` 会记录每次触发使用的 model。
