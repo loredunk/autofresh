@@ -2,6 +2,8 @@
 
 ![autofresh 工作原理](assets/autofresh.png)
 
+[English README](README_EN.md)
+
 跨平台（macOS / Linux）的 Codex & Claude 用量保活工具。
 
 一个用 Go 写的小命令行工具，帮你**自动在工作时间内定时触发 Codex 和 Claude 的保活 ping**，把每个 5 小时计费窗口"卡"在你真正需要用的时段里，让有限的额度尽量都落在工作时间被你用上，而不是浪费在睡觉或下班时段。
