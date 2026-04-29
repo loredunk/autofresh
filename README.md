@@ -1,8 +1,8 @@
 # Autofresh
 
-![autofresh 工作原理](assets/autofresh.png)
+<p align="center"><a href="README_EN.md">English README</a></p>
 
-[English README](README_EN.md)
+![autofresh 工作原理](assets/autofresh.png)
 
 跨平台（macOS / Linux）的 Codex & Claude 用量保活工具。
 
