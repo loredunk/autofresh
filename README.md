@@ -11,18 +11,30 @@
 
 ![autofresh 工作原理](assets/autofresh.png)
 
-## 编译
+## 安装
+
+**方式一：直接下载（推荐）**
+
+前往 [Releases](https://github.com/loredunk/autofresh/releases) 下载对应平台的可执行文件：
+
+| 系统 | 文件 |
+|------|------|
+| macOS（Apple Silicon / M 系列）| `autofresh-darwin-arm64` |
+| macOS（Intel）| `autofresh-darwin-amd64` |
+| Linux x86-64 | `autofresh-linux-amd64` |
+
+```bash
+chmod +x autofresh-darwin-arm64
+# macOS 需额外执行一次解除隔离
+xattr -d com.apple.quarantine autofresh-darwin-arm64
+```
+
+**方式二：从源码编译**
 
 本项目为标准 Go 模块，依据 [go.mod](go.mod) 进行编译，入口文件为 [cmd/autofresh/main.go](cmd/autofresh/main.go)。
 
-使用 Go 工具链直接编译：
-
 ```bash
-# 编译生成可执行文件
 go build -o autofresh ./cmd/autofresh
-
-# 或直接运行
-go run ./cmd/autofresh
 ```
 
 要求 Go 1.22 或更高版本。
