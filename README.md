@@ -9,6 +9,8 @@
 - 内置 `plan` / `trigger` / `logs` / `doctor` 等命令，方便查看计划、手动触发和排查
 - Codex 走 `codex exec`，Claude 走 `claude -p`，纯保活 ping，不打扰你正常使用
 
+![autofresh 工作原理](assets/autofresh.png)
+
 ## 编译
 
 本项目为标准 Go 模块，依据 [go.mod](go.mod) 进行编译，入口文件为 [cmd/autofresh/main.go](cmd/autofresh/main.go)。
