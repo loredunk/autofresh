@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"autofresh/internal/codexreport"
 	"autofresh/internal/config"
 	"autofresh/internal/logging"
 	"autofresh/internal/platform"
@@ -264,6 +265,12 @@ func (s *Service) Logs(lines int, out io.Writer) error {
 	start := len(parts) - lines
 	_, err = fmt.Fprintln(out, strings.Join(parts[start:], "\n"))
 	return err
+}
+
+// Report renders a local Codex usage report. It is read-only and independent of
+// the keep-alive scheduling/config — it only inspects CODEX_HOME.
+func (s *Service) Report(opts codexreport.Options, out io.Writer) error {
+	return codexreport.Run(opts, out)
 }
 
 func printPlan(out io.Writer, cfg config.Config, jobStatus string, times []schedule.TimeOfDay, commands []provider.Command) error {

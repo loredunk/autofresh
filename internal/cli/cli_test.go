@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"io"
 	"testing"
+
+	"autofresh/internal/codexreport"
 )
 
 func TestParseTargetRejectsInvalidValue(t *testing.T) {
@@ -16,9 +18,10 @@ func TestParseTargetRejectsInvalidValue(t *testing.T) {
 }
 
 type stubHandler struct {
-	setStart  string
-	setTarget string
-	logLines  int
+	setStart   string
+	setTarget  string
+	logLines   int
+	reportOpts codexreport.Options
 }
 
 func (s *stubHandler) Set(startTime string, target string, _ io.Writer) error {
@@ -34,6 +37,10 @@ func (s *stubHandler) RunScheduled(io.Writer) error    { return nil }
 func (s *stubHandler) Doctor(io.Writer) error          { return nil }
 func (s *stubHandler) Logs(lines int, _ io.Writer) error {
 	s.logLines = lines
+	return nil
+}
+func (s *stubHandler) Report(opts codexreport.Options, _ io.Writer) error {
+	s.reportOpts = opts
 	return nil
 }
 

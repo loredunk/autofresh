@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"io"
 	"strings"
+
+	"autofresh/internal/codexreport"
 )
 
 type Handler interface {
@@ -16,6 +18,7 @@ type Handler interface {
 	RunScheduled(out io.Writer) error
 	Doctor(out io.Writer) error
 	Logs(lines int, out io.Writer) error
+	Report(opts codexreport.Options, out io.Writer) error
 }
 
 type Dependencies struct {
@@ -64,6 +67,8 @@ func Run(args []string, deps Dependencies) error {
 		return deps.App.Doctor(deps.Stdout)
 	case "logs":
 		return runLogs(args[1:], deps)
+	case "report":
+		return runReport(args[1:], deps)
 	default:
 		return usageError()
 	}
@@ -130,8 +135,49 @@ func runTrigger(args []string, deps Dependencies) error {
 	return deps.App.Trigger(parsedTarget, deps.Stdout)
 }
 
+func runReport(args []string, deps Dependencies) error {
+	fs := flag.NewFlagSet("report", flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
+
+	date := fs.String("date", "", "single local day, YYYY-MM-DD")
+	since := fs.String("since", "", "from this local day through today, YYYY-MM-DD")
+	days := fs.Int("days", 0, "last N days including today")
+	asJSON := fs.Bool("json", false, "emit JSON instead of text")
+	byRepo := fs.Bool("by-repo", false, "detailed per-repository breakdown")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if len(fs.Args()) != 0 {
+		return errors.New("report takes no positional arguments")
+	}
+	if *days < 0 {
+		return errors.New("report requires --days to be >= 0")
+	}
+	set := 0
+	if *date != "" {
+		set++
+	}
+	if *since != "" {
+		set++
+	}
+	if *days > 0 {
+		set++
+	}
+	if set > 1 {
+		return errors.New("report accepts only one of --date, --since, --days")
+	}
+
+	return deps.App.Report(codexreport.Options{
+		Date:   *date,
+		Since:  *since,
+		Days:   *days,
+		JSON:   *asJSON,
+		ByRepo: *byRepo,
+	}, deps.Stdout)
+}
+
 func usageError() error {
-	return errors.New("usage: autofresh <set|plan|trigger|delete|run|doctor|logs>")
+	return errors.New("usage: autofresh <set|plan|trigger|delete|run|doctor|logs|report>")
 }
 
 func splitSetArgs(args []string) (string, []string, error) {
