@@ -15,31 +15,84 @@
 
 ## 安装
 
-**方式一：直接下载（推荐）**
+> 全程都在「终端」里操作。macOS 打开终端：按 `⌘ + 空格`，输入 `Terminal` 回车；Linux 一般是 `Ctrl + Alt + T`。
 
-前往 [Releases](https://github.com/loredunk/autofresh/releases) 下载对应平台的可执行文件：
+### macOS
 
-| 系统 | 文件 |
-|------|------|
-| macOS（Apple Silicon / M 系列）| `autofresh-darwin-arm64` |
-| macOS（Intel）| `autofresh-darwin-amd64` |
-| Linux x86-64 | `autofresh-linux-amd64` |
+**1. 下载**（推荐用下面的 `curl` 命令——这样下载的文件不带「隔离」标记，可跳过后面的解锁步骤）
+
+不确定自己是什么芯片？点屏幕左上角  →「关于本机」，看「芯片 / 处理器」一栏。
 
 ```bash
-chmod +x autofresh-darwin-arm64
-# macOS 需额外执行一次解除隔离
-xattr -d com.apple.quarantine autofresh-darwin-arm64
+# Apple Silicon（M1/M2/M3/M4 等）
+curl -L -o autofresh https://github.com/loredunk/autofresh/releases/latest/download/autofresh-darwin-arm64
+
+# Intel 芯片
+curl -L -o autofresh https://github.com/loredunk/autofresh/releases/latest/download/autofresh-darwin-amd64
 ```
 
-**方式二：从源码编译**
+**2. 加上可执行权限**（下载下来的文件默认不能直接运行）
 
-本项目为标准 Go 模块，依据 [go.mod](go.mod) 进行编译，入口文件为 [cmd/autofresh/main.go](cmd/autofresh/main.go)。
+```bash
+chmod +x autofresh
+```
+
+**3. 运行**
+
+```bash
+./autofresh report
+```
+
+> **如果你是从浏览器（Safari / Chrome）下载的**，macOS 会给文件打上「隔离」标记，第一次运行会弹「无法打开，因为无法验证开发者」。任选一种解锁方式：
+>
+> - 终端执行 `xattr -c autofresh` 清除隔离标记，再重新运行；或
+> - 打开 **系统设置 → 隐私与安全性**，在页面底部找到被拦下的提示，点「仍要打开」，再回终端运行一次。
+>
+> （用上面的 `curl` 方式下载则没有这个标记，直接跳过本段。）
+
+**（可选）装到全局**，之后在任意目录都能直接敲 `autofresh`：
+
+```bash
+sudo mv autofresh /usr/local/bin/
+```
+
+### Linux
+
+```bash
+curl -L -o autofresh https://github.com/loredunk/autofresh/releases/latest/download/autofresh-linux-amd64
+chmod +x autofresh
+./autofresh report
+
+# （可选）装到全局
+sudo mv autofresh /usr/local/bin/
+```
+
+### 从源码编译
+
+本项目为标准 Go 模块，依据 [go.mod](go.mod) 进行编译，入口文件为 [cmd/autofresh/main.go](cmd/autofresh/main.go)。要求 Go 1.22 或更高版本。
 
 ```bash
 go build -o autofresh ./cmd/autofresh
 ```
 
-要求 Go 1.22 或更高版本。
+> 上面的下载链接用的是 `releases/latest/...`，会永远指向最新版本，不用手动改版本号。也可以前往 [Releases](https://github.com/loredunk/autofresh/releases) 页面手动下载。
+
+## 快速上手
+
+装好后，第一条命令可以先看看自己今天的 Codex 用量（纯读取、不改任何东西）：
+
+```bash
+./autofresh report
+```
+
+想开启保活定时，设一个每天的起始时间即可（例如早上 6 点）：
+
+```bash
+./autofresh set 06:00 --target all   # 之后按 5h10m 间隔自动触发，不跨午夜
+./autofresh plan                     # 确认计划是否生效
+```
+
+> 如果上一步把二进制装进了 `/usr/local/bin`，把所有命令里的 `./autofresh` 换成 `autofresh` 即可。
 
 ## 命令
 
