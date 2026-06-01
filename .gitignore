@@ -3,3 +3,6 @@
 /autofresh-*
 /.vscode/
 /codex-report*.html
+/ai-usage-report*.html
+__pycache__/
+*.pyc

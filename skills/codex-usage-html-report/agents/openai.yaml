@@ -1,4 +1,0 @@
-interface:
-  display_name: "Codex Usage HTML Report"
-  short_description: "Generate enriched HTML reports, deeper usage insights, and session drilldowns from local Codex data."
-  default_prompt: "Generate an enriched Codex usage HTML report for today with deep insights and high-token project drilldowns."

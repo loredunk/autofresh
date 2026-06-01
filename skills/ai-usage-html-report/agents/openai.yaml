@@ -1,0 +1,4 @@
+interface:
+  display_name: "AI Usage HTML Report"
+  short_description: "Generate enriched dual-platform (Claude Code + Codex) HTML usage reports, deeper insights, and session drilldowns from local AI coding data."
+  default_prompt: "Generate an enriched dual-platform AI usage HTML report (Claude Code + Codex) for today with deep insights and high-token project drilldowns."
