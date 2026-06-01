@@ -22,7 +22,8 @@ Keep responsibilities separate:
 
 - **Claude Code data MUST come from `ccusage`.** ccusage reads each `~/.claude/projects/*.jsonl` line for the real per-message model and prices it with offline LiteLLM data, so its model/cost attribution is correct.
 - **NEVER use `~/.claude/stats-cache.json`.** It is polluted by cc-switch swapping in third-party providers (kimi, etc.), so its model/cost attribution is wrong, and it stopped updating after 2026-04-09 — stale and inaccurate. This was confirmed against real data when comparing approaches. Do not read or fall back to it under any circumstances.
-- **Codex data** comes from `autofresh report --json` (authoritative for *today*) plus `ccusage codex daily` (history).
+- **Codex data** comes from `autofresh report --since <date> --json` (token *and* behavior: repos/hours/tools/git_habits/project_management/languages/sources over the window) plus `ccusage codex daily` (token/cost history).
+- **Claude Code behavior** comes from `scripts/collect_claude_behavior.py`, which parses `~/.claude/projects/**/*.jsonl` locally (pure stdlib, offline) into the same behavior shape so both platforms render symmetrically. It emits only aggregates: Bash → first word / git subcommand only, repo → cwd basename, file → extension only. Never prompt text, file contents, full commands, or absolute paths.
 
 ## Workflow
 
@@ -32,23 +33,30 @@ Keep responsibilities separate:
    - Prefer `./autofresh` in the current repo.
    - Otherwise use `autofresh` from `PATH`.
    - If neither exists but this is the autofresh source repo, run `GOCACHE=/tmp/autofresh-go-cache go build -o autofresh ./cmd/autofresh`.
-   - Generate the Codex today snapshot: `./autofresh report --json > /tmp/codex-usage-report.json`
-     - If invoked with an argument (`$period`): a date like `2026-06-01` maps to `--date $period`; a bare integer like `7` maps to `--days $period`; empty means today. (autofresh's snapshot is still per-day; ccusage codex supplies history.)
+   - Generate the Codex report **over a window** (not just today), so autofresh emits its behavior dimensions (repos/hours/tools/git_habits/project_management/languages/sources):
+     - `./autofresh report --since <START> --json > /tmp/codex-usage-report.json`
+     - Choose `<START>` as the earliest Claude Code activity date or a sensible floor (e.g. start of the current year). autofresh supports `--since YYYY-MM-DD`, `--days N`, and `--date YYYY-MM-DD` (mutually exclusive).
+     - If invoked with an argument (`$period`): a date like `2026-06-01` maps to `--date $period`; a bare integer like `7` maps to `--days $period`; empty means a wide window via `--since`.
 2. Pull data with `ccusage` (offline, no network, no upload):
    - `npx ccusage@latest claude daily --json --offline --breakdown > /tmp/cc-daily.json`
    - `npx ccusage@latest claude session --json --offline > /tmp/cc-session.json`
    - `npx ccusage@latest codex daily --json --offline > /tmp/cc-codex.json`
    - Use `ccusage ...` directly if it is already on `PATH`; otherwise `npx ccusage@latest ...`.
-3. Merge into one dual-platform JSON:
-   - `python3 ${CLAUDE_SKILL_DIR}/scripts/merge_dual_platform.py --cc-daily /tmp/cc-daily.json --cc-session /tmp/cc-session.json --codex-report /tmp/codex-usage-report.json --codex-ccusage /tmp/cc-codex.json --output /tmp/ai-usage.json`
-4. Read `/tmp/ai-usage.json`, then write `/tmp/ai-usage-insights.json` following `references/dual-insights-schema.md`.
+3. Collect the Claude Code **behavior** profile (local stdlib parser, offline) over the same window:
+   - `python3 ${CLAUDE_SKILL_DIR}/scripts/collect_claude_behavior.py --since <START> --output /tmp/claude-behavior.json`
+   - Match `<START>`/`--days`/`--date` to the autofresh window so both platforms cover the same span. Default (no flag) is full history.
+4. Merge into one dual-platform JSON (both platforms get a unified `behavior` block):
+   - `python3 ${CLAUDE_SKILL_DIR}/scripts/merge_dual_platform.py --cc-daily /tmp/cc-daily.json --cc-session /tmp/cc-session.json --cc-behavior /tmp/claude-behavior.json --codex-report /tmp/codex-usage-report.json --codex-ccusage /tmp/cc-codex.json --output /tmp/ai-usage.json`
+   - `--cc-behavior` is optional: if omitted, the Claude Code behavior panel degrades gracefully and the Codex behavior panel (from autofresh) still renders.
+5. Read `/tmp/ai-usage.json`, then write `/tmp/ai-usage-insights.json` following `references/dual-insights-schema.md`.
    - Write the rich AI-interpretation layer the dual renderer expects:
      - `executive_summary` — a prominent paragraph (or short list) covering both platforms.
      - `recommendations` — a list; each item is a string or `{title, text, evidence}` (include `evidence` grounded in the merged numbers).
      - `insights` — a list; each item is a string or `{title, detail}`.
    - All fields are optional and backward-compatible: a flat `{"insights": ["string", ...]}` still renders. Use Chinese unless the user asks otherwise.
+   - Behavior data is in `platforms.<plat>.behavior` (tools / top_commands / git_habits / languages / repos / hours / sources / extras) for both platforms — ground at least one insight per platform in these behavior numbers.
    - For richer interpretation patterns (evidence → meaning → impact → drilldown → intervention), read `references/insight-patterns.md`; distill those ladders into the `recommendations`/`insights` fields described in `references/dual-insights-schema.md`.
-5. Render HTML:
+6. Render HTML:
    - `python3 ${CLAUDE_SKILL_DIR}/scripts/render_dual_platform.py --data /tmp/ai-usage.json --insights /tmp/ai-usage-insights.json --output ai-usage-report.html`
    - Use the user-specified output path if given; otherwise `ai-usage-report.html`.
 

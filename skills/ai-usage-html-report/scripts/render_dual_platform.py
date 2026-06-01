@@ -83,6 +83,99 @@ def model_table(models, kind):
     return "<table>" + "".join(rows) + "</table>"
 
 
+def mini_bars(items, label_key, val_key, color, unit="", top=8):
+    """Horizontal mini bar list for top_commands / git / languages / repos."""
+    items = [i for i in (items or []) if i.get(val_key)][:top]
+    if not items:
+        return "<p class='muted'>无数据</p>"
+    mx = max(i.get(val_key, 0) for i in items) or 1
+    rows = []
+    for it in items:
+        v = it.get(val_key, 0)
+        share = v / mx * 100
+        label = esc(it.get(label_key, ""))
+        vtxt = comma(v) + (f" {unit}" if unit else "")
+        rows.append(
+            f"<div class='mbar'><div class='mlabel' title='{label}'>{label}</div>"
+            f"<div class='mtrack'><div class='mfill' style='width:{share:.1f}%;"
+            f"background:{color}'></div></div>"
+            f"<div class='mval'>{vtxt}</div></div>")
+    return "".join(rows)
+
+
+def hours_chart(hours, color):
+    """24h activity columns using the `count` (message/tool activity)."""
+    if not hours:
+        return "<p class='muted'>无活跃时段数据</p>"
+    by_h = {h.get("hour"): h for h in hours}
+    vals = [by_h.get(h, {}).get("count", 0) for h in range(24)]
+    mx = max(vals) or 1
+    cols = []
+    for h in range(24):
+        v = vals[h]
+        ht = (v / mx * 100) if v else 2
+        cols.append(
+            f"<div class='hcol' title='{h:02d}:00 · {v}'>"
+            f"<div class='hbar' style='height:{ht:.0f}%;background:{color}'></div>"
+            f"<div class='hlab'>{h if h % 6 == 0 else ''}</div></div>")
+    return f"<div class='hours'>{''.join(cols)}</div>"
+
+
+def behavior_panel(beh, color, platform):
+    """Symmetric behavior block for one platform."""
+    if not beh:
+        return (f"<div class='panel'><h2>{esc(platform)} · 使用行为</h2>"
+                f"<p class='muted'>无行为数据。</p></div>")
+    p = [f"<div class='panel'><h2>{esc(platform)} · 使用行为</h2>"]
+    p.append(f"<p class='muted'>窗口 {esc(beh.get('generated_for'))} · "
+             f"{beh.get('sessions', 0)} 会话 · "
+             f"{comma(beh.get('total_tool_calls', 0))} 次工具调用</p>")
+
+    # tool categories chips
+    cats = beh.get("tool_categories") or {}
+    cat_zh = {"shell": "命令行", "web": "网络", "file": "文件",
+              "search": "搜索", "mcp": "MCP", "other": "其他"}
+    if cats:
+        chips = "".join(
+            f"<span class='chip'>{esc(cat_zh.get(k, k))} {comma(v)}</span>"
+            for k, v in sorted(cats.items(), key=lambda kv: -kv[1]) if v)
+        p.append(f"<div class='chips'>{chips}</div>")
+
+    # tools by name (Claude only) else top commands
+    if beh.get("tools_by_name"):
+        p.append("<h3>工具 Top</h3>")
+        p.append(mini_bars(beh["tools_by_name"], "name", "count", color))
+    p.append("<h3>命令 Top（仅命令首词）</h3>")
+    p.append(mini_bars(beh.get("top_commands"), "command", "count", color))
+
+    p.append("<h3>Git 习惯（子命令次数）</h3>")
+    p.append(mini_bars(beh.get("git_habits"), "command", "count", color))
+
+    unit = beh.get("languages_unit", "")
+    p.append(f"<h3>语言分布（{esc(unit)}）</h3>")
+    p.append(mini_bars(beh.get("languages"), "name", "count", color, unit=unit))
+
+    p.append("<h3>Repo 排行（按 Token）</h3>")
+    p.append(mini_bars(beh.get("repos"), "repo", "tokens", color))
+
+    p.append("<h3>活跃时段（本地时区，按活动计数）</h3>")
+    p.append(hours_chart(beh.get("hours"), color))
+
+    src = beh.get("sources") or []
+    if src:
+        p.append("<h3>来源</h3>")
+        p.append(mini_bars(src, "name", "count", color))
+
+    extras = beh.get("extras") or []
+    if extras:
+        p.append("<h3>行为信号</h3><ul class='sig'>")
+        for e in extras:
+            p.append(f"<li>{esc(e)}</li>")
+        p.append("</ul>")
+    p.append("</div>")
+    return "".join(p)
+
+
 def sparkline(series, color):
     if not series:
         return ""
@@ -236,6 +329,13 @@ def render(data, insights):
     p.append(bar_row("reasoning", cxt.get("reasoning", 0), cxt["total"]))
     p.append("</div></section>")
 
+    # symmetric behavior panels (tools / git / languages / repos / hours)
+    p.append("<section><h2 class='section-h'>使用行为画像（两平台对称）</h2>"
+             "<div class='grid2'>")
+    p.append(behavior_panel(cc.get("behavior"), "#0f766e", "Claude Code"))
+    p.append(behavior_panel(cx.get("behavior"), "#b45309", "Codex"))
+    p.append("</div></section>")
+
     # data provenance / privacy
     p.append("<section class='panel'><h2>数据来源与隐私</h2><ul>")
     p.append("<li>Claude Code：<code>ccusage claude daily/session --json --offline --breakdown</code>，"
@@ -273,7 +373,19 @@ code{font-family:ui-monospace,Menlo,monospace;font-size:12px}ul{margin:0;padding
 .bar{display:grid;grid-template-columns:90px 1fr 150px;gap:8px;align-items:center;margin:5px 0}.blabel{font-size:12px;color:var(--muted)}
 .btrack{height:14px;background:var(--line);border-radius:4px;overflow:hidden}.bfill{height:100%;background:var(--a)}.bval{font-size:12px;text-align:right}
 .spark{width:100%;height:46px;margin:6px 0}
-@media(max-width:900px){.metrics,.grid2,.cards{grid-template-columns:1fr}}
+.section-h{margin:18px 0 10px;font-size:18px}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 8px}
+.chip{font-size:11px;background:var(--line);border-radius:10px;padding:2px 9px;color:var(--fg)}
+.mbar{display:grid;grid-template-columns:120px 1fr 96px;gap:8px;align-items:center;margin:3px 0}
+.mlabel{font-size:12px;color:var(--fg);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mtrack{height:12px;background:var(--line);border-radius:4px;overflow:hidden}.mfill{height:100%}
+.mval{font-size:11px;text-align:right;color:var(--muted)}
+.hours{display:flex;align-items:flex-end;gap:2px;height:70px;margin:8px 0 2px}
+.hcol{flex:1;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;height:100%}
+.hbar{width:70%;border-radius:2px 2px 0 0;min-height:2px}
+.hlab{font-size:9px;color:var(--muted);margin-top:2px;height:11px}
+ul.sig{margin:4px 0;padding-left:18px}ul.sig li{font-size:12px;color:var(--muted);margin:2px 0}
+@media(max-width:900px){.metrics,.grid2,.cards{grid-template-columns:1fr}.mbar{grid-template-columns:90px 1fr 70px}}
 """
 
 

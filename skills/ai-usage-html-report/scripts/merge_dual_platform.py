@@ -4,11 +4,15 @@ report --json, with ccusage codex as historical fallback) into one dual-platform
 usage JSON.
 
 Inputs (all JSON files produced beforehand):
-  --cc-daily      ccusage claude daily --json --offline --breakdown
-  --cc-session    ccusage claude session --json --offline
-  --codex-report  ./autofresh report --json   (today-only Codex snapshot)
-  --codex-ccusage ccusage codex daily --json --offline   (historical Codex, fallback)
-  --output        merged dual-platform JSON path
+  --cc-daily        ccusage claude daily --json --offline --breakdown
+  --cc-session      ccusage claude session --json --offline
+  --cc-behavior     collect_claude_behavior.py output (Claude Code behavior)
+  --codex-report    ./autofresh report --since <date> --json  (Codex behavior+tokens)
+  --codex-ccusage   ccusage codex daily --json --offline   (historical Codex, fallback)
+  --output          merged dual-platform JSON path
+
+Both platforms expose a unified `behavior` block (tools / git_habits /
+languages / repos / hours / sources) so the renderer can show them symmetrically.
 
 Privacy: only aggregate counts/costs are read. No prompt text, session content,
 file paths beyond project basenames, or secrets are touched.
@@ -45,7 +49,149 @@ def cache_hit_rate(cache_read, total_input_like):
     return (cache_read / denom) if denom else 0.0
 
 
-def build_claude(cc_daily, cc_session):
+# --------------------------------------------------------------------------
+# Unified behavior block. Both platforms emit the same shape so the renderer
+# can show symmetric panels:
+#   behavior = {
+#     generated_for, sessions, total_tool_calls,
+#     tools_by_name:   [{name, count}],
+#     top_commands:    [{command, count}],
+#     tool_categories: {shell, web, file, ...},
+#     git_habits:      [{command, count}],
+#     languages:       [{name, count}],   # files (Claude) / sessions (Codex)
+#     languages_unit:  "文件" | "会话",
+#     repos:           [{repo, sessions, tokens, tool_calls}],
+#     hours:           [{hour, tokens, count}],
+#     sources:         [{name, count}],
+#     extras:          [ "标签: 值", ... ],   # platform-specific signals
+#   }
+# --------------------------------------------------------------------------
+
+# Known git subcommands; anything else (e.g. a leaked path captured by
+# autofresh's parser) is dropped from the rendered git-habits list so no
+# absolute path or arbitrary token reaches the report.
+GIT_SUBCMDS = {
+    "add", "commit", "push", "pull", "fetch", "diff", "status", "log",
+    "checkout", "branch", "merge", "rebase", "stash", "show", "reset",
+    "clone", "switch", "restore", "tag", "cherry-pick", "revert",
+    "rev-parse", "remote", "init", "blame",
+}
+
+
+def _clean_commands(cmds):
+    """Reduce command labels to a safe basename token (strip any path), drop
+    anything still containing a slash so no absolute path reaches the report."""
+    out = []
+    for c in cmds or []:
+        base = (c.get("command") or "").strip().rsplit("/", 1)[-1]
+        if not base or "/" in base:
+            continue
+        out.append(dict(command=base, count=c.get("count", 0)))
+    return out
+
+
+def _clean_git(subs):
+    """Keep only recognised git subcommands (privacy: drop leaked paths/tokens)."""
+    out = []
+    for s in subs or []:
+        cmd = (s.get("command") or "").lower()
+        if cmd in GIT_SUBCMDS:
+            out.append(dict(command=cmd, count=s.get("count", 0)))
+    return out
+
+
+def _norm_hours(hours, count_key=None):
+    """Normalize hour list to [{hour, tokens, count}] for 0..23 sparse->kept."""
+    out = []
+    for h in hours:
+        out.append(dict(hour=h.get("hour", 0),
+                        tokens=h.get("tokens", 0),
+                        count=h.get("count", h.get("tokens", 0) if count_key is None
+                              else h.get(count_key, 0))))
+    return out
+
+
+def claude_behavior(cb):
+    """Normalize collect_claude_behavior.py output into the unified shape."""
+    if not cb:
+        return None
+    tools = cb.get("tools", {})
+    repos = [dict(repo=r.get("repo"), sessions=r.get("sessions", 0),
+                  tokens=r.get("tokens", 0), tool_calls=r.get("tool_calls", 0))
+             for r in cb.get("repos", [])][:10]
+    sources = list(cb.get("sources", {}).get("entrypoints", []))
+    sc = cb.get("sources", {})
+    extras = []
+    pm = sc.get("permission_modes", [])
+    if pm:
+        extras.append("权限模式: " + "、".join(
+            f"{p['name']}×{p['count']}" for p in pm[:4]))
+    if sc.get("subagent_calls"):
+        extras.append(f"子代理调用 {sc['subagent_calls']} 次"
+                      f"（占记录 {sc.get('subagent_share', 0) * 100:.1f}%）")
+    return dict(
+        generated_for=cb.get("generated_for"),
+        sessions=cb.get("sessions", 0),
+        total_tool_calls=tools.get("total_calls", 0),
+        tools_by_name=tools.get("by_name", []),
+        top_commands=_clean_commands(tools.get("top_commands", [])),
+        tool_categories=tools.get("categories", {}),
+        git_habits=_clean_git(cb.get("git_habits", {}).get("top_subcommands", [])),
+        languages=[dict(name=l.get("name"), count=l.get("files", 0))
+                   for l in cb.get("languages", [])][:10],
+        languages_unit="文件",
+        repos=repos,
+        hours=_norm_hours(cb.get("hours", [])),
+        sources=sources,
+        extras=extras,
+    )
+
+
+def codex_behavior(r):
+    """Normalize autofresh report --json into the unified behavior shape."""
+    if not r:
+        return None
+    tools = r.get("tools", {})
+    cats = dict(
+        shell=tools.get("shell_calls", 0),
+        web=tools.get("web_searches", 0),
+        file=tools.get("file_changes", 0),
+    )
+    repos = [dict(repo=x.get("repo"), sessions=x.get("sessions", 0),
+                  tokens=x.get("tokens", 0),
+                  tool_calls=0)  # autofresh repo has no per-repo tool count
+             for x in r.get("repos", [])][:10]
+    git = r.get("git_habits", {})
+    pm = r.get("project_management", {})
+    # Drop any signal containing a path-like token so no absolute path leaks.
+    def _safe(sigs, n):
+        return [s for s in (sigs or []) if "/" not in s][:n]
+    extras = []
+    extras += _safe(git.get("review_signals"), 3)
+    extras += _safe(git.get("risk_signals"), 2)
+    extras += _safe(pm.get("signals"), 3)
+    if r.get("reasoning_ratio"):
+        extras.append(f"推理 token 占比 {r['reasoning_ratio'] * 100:.1f}%")
+    return dict(
+        generated_for=r.get("generated_for"),
+        sessions=r.get("sessions", 0),
+        total_tool_calls=tools.get("total_calls", 0),
+        tools_by_name=[],  # autofresh doesn't break tools down by name
+        top_commands=_clean_commands(tools.get("top_commands", [])),
+        tool_categories=cats,
+        git_habits=_clean_git(git.get("top_subcommands", [])),
+        languages=[dict(name=l.get("name"), count=l.get("sessions", 0))
+                   for l in r.get("languages", [])][:10],
+        languages_unit="会话",
+        repos=repos,
+        hours=_norm_hours(r.get("hours", [])),
+        sources=[dict(name=s.get("name"), count=s.get("sessions", 0))
+                 for s in r.get("sources", [])],
+        extras=extras,
+    )
+
+
+def build_claude(cc_daily, cc_session, cc_behavior=None):
     t = cc_daily.get("totals", {})
     daily = cc_daily.get("daily", [])
     sessions = cc_session.get("sessions", [])
@@ -83,6 +229,7 @@ def build_claude(cc_daily, cc_session):
         models=models,
         daily_series=series,
         top_sessions=top,
+        behavior=claude_behavior(cc_behavior),
     )
 
 
@@ -144,6 +291,7 @@ def build_codex(codex_report, codex_ccusage):
         cache_hit_rate=round(chr_, 4),
         models=models,
         daily_series=series,
+        behavior=codex_behavior(r),
     )
 
 
@@ -151,12 +299,14 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--cc-daily", required=True)
     ap.add_argument("--cc-session", required=True)
+    ap.add_argument("--cc-behavior", default="")
     ap.add_argument("--codex-report", required=True)
     ap.add_argument("--codex-ccusage", required=True)
     ap.add_argument("--output", required=True)
     a = ap.parse_args()
 
-    claude = build_claude(load(a.cc_daily), load(a.cc_session))
+    cc_behavior = load(a.cc_behavior) if a.cc_behavior else None
+    claude = build_claude(load(a.cc_daily), load(a.cc_session), cc_behavior)
     codex = build_codex(load(a.codex_report), load(a.codex_ccusage))
 
     merged = dict(
