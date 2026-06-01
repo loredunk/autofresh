@@ -99,3 +99,20 @@ func TestRunLogsAcceptsNFlag(t *testing.T) {
 		t.Fatalf("got log lines %d", handler.logLines)
 	}
 }
+
+func TestRunReportAcceptsJSONFlag(t *testing.T) {
+	t.Parallel()
+
+	handler := &stubHandler{}
+	err := Run([]string{"report", "--json", "--days", "1"}, Dependencies{
+		App:    handler,
+		Stdout: &bytes.Buffer{},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !handler.reportOpts.JSON {
+		t.Fatalf("unexpected report opts: %+v", handler.reportOpts)
+	}
+}

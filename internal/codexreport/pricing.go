@@ -13,20 +13,23 @@ type price struct {
 
 // priceTable maps a normalized model family prefix to its rates. These are
 // ESTIMATES for reporting only — Codex rollouts do not record billed cost, so we
-// approximate from published list prices. Matching is longest-prefix, so add
-// more specific keys (e.g. a "-codex" variant) before the family default.
+// approximate from published list prices. Matching is longest-prefix so that
+// more specific keys (e.g. a "-codex" variant) win over the family default.
 //
-// All figures are USD per 1,000,000 tokens.
+// All figures are USD per 1,000,000 tokens. Rates are standard OpenAI API
+// text-token prices, last checked against official pricing on 2026-06-01.
 var priceTable = []struct {
 	prefix string
 	p      price
 }{
-	{"gpt-5.5", price{input: 1.25, cachedInput: 0.125, output: 10.0}},
-	{"gpt-5.4", price{input: 1.25, cachedInput: 0.125, output: 10.0}},
-	{"gpt-5.3", price{input: 1.25, cachedInput: 0.125, output: 10.0}},
-	{"gpt-5.2", price{input: 1.25, cachedInput: 0.125, output: 10.0}},
+	{"gpt-5.5", price{input: 5.0, cachedInput: 0.5, output: 30.0}},
+	{"gpt-5.4-mini", price{input: 0.75, cachedInput: 0.075, output: 4.5}},
+	{"gpt-5.4-nano", price{input: 0.20, cachedInput: 0.02, output: 1.25}},
+	{"gpt-5.4", price{input: 2.50, cachedInput: 0.25, output: 15.0}},
+	{"gpt-5.3-codex", price{input: 1.75, cachedInput: 0.175, output: 14.0}},
+	{"gpt-5.2-codex", price{input: 1.75, cachedInput: 0.175, output: 14.0}},
+	{"gpt-5.2", price{input: 1.75, cachedInput: 0.175, output: 14.0}},
 	{"gpt-5.1", price{input: 1.25, cachedInput: 0.125, output: 10.0}},
-	{"gpt-5-codex", price{input: 1.25, cachedInput: 0.125, output: 10.0}},
 	{"gpt-5-mini", price{input: 0.25, cachedInput: 0.025, output: 2.0}},
 	{"gpt-5", price{input: 1.25, cachedInput: 0.125, output: 10.0}},
 }
@@ -44,12 +47,15 @@ func normalizeModel(model string) string {
 // lookupPrice returns the rates for a model and whether a match was found.
 func lookupPrice(model string) (price, bool) {
 	m := normalizeModel(model)
+	bestLen := -1
+	var best price
 	for _, e := range priceTable {
-		if strings.HasPrefix(m, e.prefix) {
-			return e.p, true
+		if strings.HasPrefix(m, e.prefix) && len(e.prefix) > bestLen {
+			bestLen = len(e.prefix)
+			best = e.p
 		}
 	}
-	return price{}, false
+	return best, bestLen >= 0
 }
 
 // estimateCost computes the USD estimate for a token increment under a model.

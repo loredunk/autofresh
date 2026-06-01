@@ -100,7 +100,7 @@ go build -o autofresh ./cmd/autofresh
 ./autofresh set 06:00 --target all   # 给claude和codex设置一天的第一次fresh定时
 ./autofresh plan        # 查看当前计划
 ./autofresh trigger     # 尝试用autofresh给codex和claude发送打招呼
-./autofresh trigger --target codex  # 用trigger给codex gpt5.4 mini发一个ok
+./autofresh trigger --target codex  # 用trigger给codex gpt-5.4-mini发一个ok
 ./autofresh logs        # 看所有的logs
 ./autofresh logs -n 10    # 看 10 行logs
 ./autofresh doctor    # 诊断当前计划
@@ -112,7 +112,7 @@ go build -o autofresh ./cmd/autofresh
 
 ### report：本机 Codex 使用报告
 
-只读分析本机 `$CODEX_HOME`（默认 `~/.codex`）里的 rollout 记录，输出 Token 用量、估算成本、工具调用拆解，以及按仓库/时段等维度的统计。默认看今天：
+只读分析本机 `$CODEX_HOME`（默认 `~/.codex`）里的 rollout 记录，输出 Token 用量、估算成本、工具调用拆解，以及按来源、语言、仓库、时段等维度的统计。默认看今天：
 
 ```bash
 ./autofresh report                 # 今天本机的 Codex 使用报告
@@ -128,10 +128,58 @@ go build -o autofresh ./cmd/autofresh
 - **只反映这台电脑**：同一账号登录多台机器时，rollout 天然按机器隔离，本命令只读本机文件、不跨机器汇总。
 - 不调用 `codex` 的 `/status`，也不读取 rollout 里的 `rate_limits`（CLI 下恒为 null，且配额百分比是账号级、跨机器的），因此**报告不输出任何配额百分比**。
 - Token 取 `token_count` 事件里的累计值并按会话求增量去重；子代理（thread_spawn）会话会被排除，避免重复计数。
+- 来源来自 Codex 本地 thread metadata，用于区分 CLI、Codex App、IDE 插件等入口；同一个 rollout 文件即使被多条 thread 记录引用也只计一次。
+- 语言为本机仓库文件扩展名推断值，只用于辅助判断主要工作栈，不代表 Codex 服务端记录了语言字段。
+- 仓库维度会补充主语言、语言文件分布、构建系统、测试命令、变更文件类型；`--json` 会输出完整字段，适合交给 Codex skill 生成日报。
+- 配置痕迹只读取 `config.toml` 的非敏感键、MCP/profile 名称、全局/项目 AGENTS 文件是否存在和大小；不会输出指令正文、token、header、密钥值。
 - 成本为**估算值**（token × 内置参考价），仅供参考，不等于实际账单。
 - 时间窗口按本机时区的绝对日期边界划分，报告头部会标明时区。
 - autofresh 自己的保活 ping 用了 `--ephemeral`、不写 rollout，因此不会出现在本报告中（符合预期）。
 - 优先通过 `state_*.sqlite` 定位 rollout 文件；没有 sqlite（或存在未合并的 WAL）时自动退回扫描 `~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl`。
+
+### 增强版 HTML 报告 Skill
+
+仓库内置了可复用的 Codex skill：[skills/codex-usage-html-report](skills/codex-usage-html-report/SKILL.md)。它不会替代 `autofresh report`；它会先读取 `./autofresh report --json` 的事实数据，再由 Codex 写入更深的分析、建议和项目画像，最后渲染成增强版 HTML。增强报告会优先产出“指标 → 含义 → 影响 → 继续深入 → 建议动作”这种洞见，例如从高 `cached_input` 判断长会话和大上下文复用。
+
+这个 skill 也支持逐步 drilldown：先从报告里找出高 Token / 高成本项目，让用户选择项目；再列出该项目下最重的 session；只有在用户明确同意后，才读取某个具体 session 的 user prompt 做 prompt 质量复盘。它不会读取隐藏的 Codex/OpenAI system prompt，也不会默认把 prompt 正文写进 HTML。
+
+安装给 Codex 使用：
+
+```bash
+mkdir -p "${CODEX_HOME:-$HOME/.codex}/skills"
+cp -R skills/codex-usage-html-report "${CODEX_HOME:-$HOME/.codex}/skills/"
+```
+
+然后重启 Codex 或开启新会话，直接说：
+
+```text
+使用 codex-usage-html-report 生成今天的 Codex 使用增强 HTML 报告。
+```
+
+也可以让它聚焦高消耗项目：
+
+```text
+使用 codex-usage-html-report 找出最近 7 天最费 token 的项目，然后让我选择一个 session 做 prompt 复盘。
+```
+
+如果只想手动跑底层流程：
+
+```bash
+./autofresh report --json > /tmp/codex-usage-report.json
+# 让 Codex 按 skills/codex-usage-html-report/references/insights-schema.md 写 /tmp/codex-usage-insights.json
+python3 skills/codex-usage-html-report/scripts/render_enriched_codex_report.py \
+  --report /tmp/codex-usage-report.json \
+  --insights /tmp/codex-usage-insights.json \
+  --output codex-report.enriched.html
+
+# 可选：先列出某个项目里的高 token session，不读取 prompt 正文
+python3 skills/codex-usage-html-report/scripts/session_drilldown.py \
+  --days 7 \
+  --repo autofresh \
+  --top 20 > /tmp/codex-session-candidates.json
+```
+
+本地生成的 `codex-report*.html` 已在 `.gitignore` 中忽略，避免误提交个人报告。
 
 ## 行为
 
@@ -142,3 +190,4 @@ go build -o autofresh ./cmd/autofresh
 - Linux 使用 `crontab`
 - Codex 保活使用 `codex exec --model gpt-5.4-mini --skip-git-repo-check --ephemeral "ok"`
 - Claude 保活使用 `claude --model haiku -p "ok"`
+- `gpt-5.4-nano` 比 `gpt-5.4-mini` 更小，但目前只适用于 OpenAI API；Codex CLI 保活仍使用 Codex 可用的最小 GPT-5.4 系列模型 `gpt-5.4-mini`。Claude 的 `haiku` 是 Claude Code 的轻量模型别名，会随官方别名解析到对应 Haiku 模型。

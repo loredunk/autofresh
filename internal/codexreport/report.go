@@ -58,8 +58,13 @@ type Report struct {
 		TopCommands []CommandCount `json:"top_commands"`
 	} `json:"tools"`
 
-	Repos []RepoReport `json:"repos"`
-	Hours []HourReport `json:"hours"`
+	Repos     []RepoReport      `json:"repos"`
+	Hours     []HourReport      `json:"hours"`
+	Sources   []UsageReport     `json:"sources"`
+	Languages []UsageReport     `json:"languages"`
+	Git       GitHabitsReport   `json:"git_habits"`
+	Project   ProjectMgmtReport `json:"project_management"`
+	Codex     CodexConfigReport `json:"codex"`
 }
 
 type CommandCount struct {
@@ -68,16 +73,76 @@ type CommandCount struct {
 }
 
 type RepoReport struct {
-	Repo     string   `json:"repo"`
-	Branches []string `json:"branches,omitempty"`
-	Sessions int      `json:"sessions"`
-	Tokens   int64    `json:"tokens"`
-	CostUSD  float64  `json:"estimated_cost_usd"`
+	Repo            string            `json:"repo"`
+	Branches        []string          `json:"branches,omitempty"`
+	Sessions        int               `json:"sessions"`
+	Tokens          int64             `json:"tokens"`
+	CostUSD         float64           `json:"estimated_cost_usd"`
+	Language        string            `json:"language,omitempty"`
+	LanguageMix     []LanguageCount   `json:"language_mix,omitempty"`
+	BuildSystems    []string          `json:"build_systems,omitempty"`
+	TestCommands    []string          `json:"test_commands,omitempty"`
+	FileChangeTypes []FileChangeCount `json:"file_change_types,omitempty"`
 }
 
 type HourReport struct {
 	Hour   int   `json:"hour"`
 	Tokens int64 `json:"tokens"`
+}
+
+type UsageReport struct {
+	Name     string `json:"name"`
+	Sessions int    `json:"sessions"`
+	Tokens   int64  `json:"tokens"`
+}
+
+type LanguageCount struct {
+	Language string `json:"language"`
+	Files    int    `json:"files"`
+}
+
+type FileChangeCount struct {
+	Type  string `json:"type"`
+	Count int    `json:"count"`
+}
+
+type CodexConfigReport struct {
+	UserConfig              ConfigSummary        `json:"user_config"`
+	ProfileConfigs          []ConfigSummary      `json:"profile_configs,omitempty"`
+	GlobalInstructionFiles  []InstructionSummary `json:"global_instruction_files,omitempty"`
+	ProjectInstructionFiles int                  `json:"project_instruction_files"`
+	HistoryPersistence      string               `json:"history_persistence,omitempty"`
+}
+
+type ConfigSummary struct {
+	Path    string            `json:"path"`
+	Exists  bool              `json:"exists"`
+	Keys    map[string]string `json:"keys,omitempty"`
+	Secrets []string          `json:"secrets,omitempty"`
+}
+
+type InstructionSummary struct {
+	Path  string `json:"path"`
+	Bytes int64  `json:"bytes"`
+}
+
+type GitHabitsReport struct {
+	CommandCount     int            `json:"command_count"`
+	TopSubcommands   []CommandCount `json:"top_subcommands,omitempty"`
+	BranchCount      int            `json:"branch_count"`
+	MultiBranchRepos int            `json:"multi_branch_repos"`
+	ReviewSignals    []string       `json:"review_signals,omitempty"`
+	RiskSignals      []string       `json:"risk_signals,omitempty"`
+}
+
+type ProjectMgmtReport struct {
+	ReposWithTests       int      `json:"repos_with_tests"`
+	ReposWithBuildSystem int      `json:"repos_with_build_system"`
+	ReposWithCI          int      `json:"repos_with_ci"`
+	PlanningFileChanges  int      `json:"planning_file_changes"`
+	DocumentationChanges int      `json:"documentation_changes"`
+	ConfigChanges        int      `json:"config_changes"`
+	Signals              []string `json:"signals,omitempty"`
 }
 
 // Run generates and renders a report to out.
@@ -191,11 +256,16 @@ func assemble(agg *aggregate, desc, source, home string, loc *time.Location) Rep
 
 	for _, ra := range agg.byRepo {
 		r.Repos = append(r.Repos, RepoReport{
-			Repo:     ra.repo,
-			Branches: sortedKeys(ra.branches),
-			Sessions: len(ra.sessions),
-			Tokens:   ra.tokens.Total,
-			CostUSD:  ra.cost,
+			Repo:            ra.repo,
+			Branches:        sortedKeys(ra.branches),
+			Sessions:        len(ra.sessions),
+			Tokens:          ra.tokens.Total,
+			CostUSD:         ra.cost,
+			Language:        ra.language,
+			LanguageMix:     ra.languageMix,
+			BuildSystems:    sortedKeys(ra.buildSystems),
+			TestCommands:    sortedKeys(ra.testCommands),
+			FileChangeTypes: topFileChangeTypes(ra.fileTypes, 8),
 		})
 	}
 	sort.Slice(r.Repos, func(i, j int) bool { return r.Repos[i].Tokens > r.Repos[j].Tokens })
@@ -205,7 +275,49 @@ func assemble(agg *aggregate, desc, source, home string, loc *time.Location) Rep
 			r.Hours = append(r.Hours, HourReport{Hour: h, Tokens: agg.byHour[h].Total})
 		}
 	}
+	r.Sources = usageReports(agg.bySource)
+	r.Languages = usageReports(agg.byLanguage)
+	r.Git = buildGitHabits(agg, r.Repos)
+	r.Project = buildProjectMgmt(r.Repos)
+	r.Codex = scanCodexConfig(home, agg)
 	return r
+}
+
+func usageReports(groups map[string]*usageAgg) []UsageReport {
+	out := make([]UsageReport, 0, len(groups))
+	for _, g := range groups {
+		out = append(out, UsageReport{
+			Name:     g.name,
+			Sessions: len(g.sessions),
+			Tokens:   g.tokens.Total,
+		})
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Tokens != out[j].Tokens {
+			return out[i].Tokens > out[j].Tokens
+		}
+		return out[i].Name < out[j].Name
+	})
+	return out
+}
+
+func topFileChangeTypes(m map[string]int, n int) []FileChangeCount {
+	out := make([]FileChangeCount, 0, len(m))
+	for typ, count := range m {
+		if count > 0 {
+			out = append(out, FileChangeCount{Type: typ, Count: count})
+		}
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Count != out[j].Count {
+			return out[i].Count > out[j].Count
+		}
+		return out[i].Type < out[j].Type
+	})
+	if len(out) > n {
+		out = out[:n]
+	}
+	return out
 }
 
 func topCommands(m map[string]int, n int) []CommandCount {
@@ -290,6 +402,26 @@ func renderText(r Report, byRepo bool, out io.Writer) error {
 	}
 	fmt.Fprintln(&b)
 
+	if len(r.Sources) > 0 {
+		fmt.Fprintln(&b, "按来源")
+		renderUsageBreakdown(&b, r.Sources, r.Tokens.Total)
+		fmt.Fprintln(&b)
+	}
+
+	if len(r.Languages) > 0 {
+		fmt.Fprintln(&b, "按语言（根据本机仓库文件估算）")
+		renderUsageBreakdown(&b, r.Languages, r.Tokens.Total)
+		fmt.Fprintln(&b)
+	}
+
+	fmt.Fprintln(&b, "习惯")
+	fmt.Fprintf(&b, "  Git 命令 %d 次 · 分支上下文 %d 个 · 多分支仓库 %d 个\n",
+		r.Git.CommandCount, r.Git.BranchCount, r.Git.MultiBranchRepos)
+	if len(r.Project.Signals) > 0 {
+		fmt.Fprintf(&b, "  项目管理: %s\n", strings.Join(r.Project.Signals, "；"))
+	}
+	fmt.Fprintln(&b)
+
 	if len(r.Repos) > 0 {
 		fmt.Fprintln(&b, "按仓库")
 		limit := len(r.Repos)
@@ -301,8 +433,12 @@ func renderText(r Report, byRepo bool, out io.Writer) error {
 			if byRepo && len(rr.Branches) > 0 {
 				branch = " [" + strings.Join(rr.Branches, ",") + "]"
 			}
-			fmt.Fprintf(&b, "  %-24s %d 会话  %s token  $%.2f%s\n",
-				truncate(rr.Repo, 24), rr.Sessions, comma(rr.Tokens), rr.CostUSD, branch)
+			detail := repoDetail(rr)
+			if detail != "" {
+				detail = " · " + detail
+			}
+			fmt.Fprintf(&b, "  %-24s %d 会话  %s token  $%.2f%s%s\n",
+				truncate(rr.Repo, 24), rr.Sessions, comma(rr.Tokens), rr.CostUSD, branch, detail)
 		}
 		if !byRepo && len(r.Repos) > limit {
 			fmt.Fprintf(&b, "  …另有 %d 个仓库（用 --by-repo 查看全部）\n", len(r.Repos)-limit)
@@ -317,6 +453,55 @@ func renderText(r Report, byRepo bool, out io.Writer) error {
 
 	_, err := io.WriteString(out, b.String())
 	return err
+}
+
+func renderUsageBreakdown(b *strings.Builder, rows []UsageReport, total int64) {
+	limit := len(rows)
+	if limit > 8 {
+		limit = 8
+	}
+	for _, row := range rows[:limit] {
+		pct := 0.0
+		if total > 0 {
+			pct = float64(row.Tokens) / float64(total) * 100
+		}
+		fmt.Fprintf(b, "  %-16s %d 会话  %5.1f%%  %s token\n",
+			truncate(row.Name, 16), row.Sessions, pct, comma(row.Tokens))
+	}
+	if len(rows) > limit {
+		fmt.Fprintf(b, "  …另有 %d 项\n", len(rows)-limit)
+	}
+}
+
+func repoDetail(rr RepoReport) string {
+	var parts []string
+	if rr.Language != "" {
+		parts = append(parts, rr.Language)
+	}
+	if len(rr.BuildSystems) > 0 {
+		parts = append(parts, strings.Join(limitStrings(rr.BuildSystems, 2), "+"))
+	}
+	if len(rr.TestCommands) > 0 {
+		parts = append(parts, "测试:"+strings.Join(limitStrings(rr.TestCommands, 2), ", "))
+	}
+	if len(rr.FileChangeTypes) > 0 {
+		var changed []string
+		for _, fc := range rr.FileChangeTypes {
+			changed = append(changed, fmt.Sprintf("%s(%d)", fc.Type, fc.Count))
+			if len(changed) == 2 {
+				break
+			}
+		}
+		parts = append(parts, "变更:"+strings.Join(changed, ", "))
+	}
+	return strings.Join(parts, " · ")
+}
+
+func limitStrings(values []string, n int) []string {
+	if len(values) <= n {
+		return values
+	}
+	return values[:n]
 }
 
 func renderHours(b *strings.Builder, hours []HourReport, total int64) {

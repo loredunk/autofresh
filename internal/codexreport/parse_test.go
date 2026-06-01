@@ -97,15 +97,105 @@ func TestOutOfWindowExcluded(t *testing.T) {
 	}
 }
 
+func TestDuplicateRolloutPathIsCountedOnce(t *testing.T) {
+	path := writeRollout(t,
+		`{"timestamp":"2026-05-13T01:00:00Z","type":"session_meta","payload":{"id":"same-session","cwd":"/tmp/repo"}}`,
+		`{"timestamp":"2026-05-13T01:00:01Z","type":"turn_context","payload":{"model":"gpt-5.4-mini"}}`,
+		`{"timestamp":"2026-05-13T01:00:02Z","type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":100,"cached_input_tokens":0,"output_tokens":10,"reasoning_output_tokens":0,"total_tokens":110}}}}`,
+		`{"timestamp":"2026-05-13T01:00:03Z","type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":300,"cached_input_tokens":0,"output_tokens":30,"reasoning_output_tokens":0,"total_tokens":330}}}}`,
+	)
+
+	threads := dedupeThreads([]Thread{
+		{ID: "same-session", RolloutPath: path, Source: "vscode"},
+		{ID: "same-session", RolloutPath: path, Source: "codex-app"},
+	})
+
+	agg := newAggregate()
+	for _, thread := range threads {
+		parseThread(thread, dayOpts(t, "2026-05-13"), agg)
+	}
+
+	if agg.tokens.Total != 220 {
+		t.Fatalf("duplicate rollout should count once, got %+v", agg.tokens)
+	}
+}
+
+func TestUsageBreakdownsTrackSourceAndLanguage(t *testing.T) {
+	repo := t.TempDir()
+	if err := os.Mkdir(filepath.Join(repo, ".git"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(repo, "go.mod"), []byte("module example\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(repo, "main.go"), []byte("package main\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	path := writeRollout(t,
+		`{"timestamp":"2026-05-13T01:00:00Z","type":"turn_context","payload":{"model":"gpt-5.4-mini"}}`,
+		`{"timestamp":"2026-05-13T01:00:01Z","type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":100,"cached_input_tokens":0,"output_tokens":10,"reasoning_output_tokens":0,"total_tokens":110}}}}`,
+		`{"timestamp":"2026-05-13T01:00:02Z","type":"response_item","payload":{"type":"function_call","name":"exec_command","arguments":"{\"cmd\":\"go test ./...\"}"}}`,
+		`{"timestamp":"2026-05-13T01:00:03Z","type":"response_item","payload":{"type":"function_call","name":"exec_command","arguments":"{\"cmd\":\"git status --short\"}"}}`,
+		`{"timestamp":"2026-05-13T01:00:04Z","type":"event_msg","payload":{"type":"patch_apply_end","changes":{"main.go":{},"README.md":{}}}}`,
+		`{"timestamp":"2026-05-13T01:00:04Z","type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":300,"cached_input_tokens":0,"output_tokens":30,"reasoning_output_tokens":0,"total_tokens":330}}}}`,
+	)
+
+	agg := newAggregate()
+	parseThread(Thread{ID: "go-cli", RolloutPath: path, Cwd: repo, Source: "cli"}, dayOpts(t, "2026-05-13"), agg)
+
+	if got := agg.bySource["cli"].tokens.Total; got != 220 {
+		t.Fatalf("source tokens=%d want 220", got)
+	}
+	if got := agg.byLanguage["Go"].tokens.Total; got != 220 {
+		t.Fatalf("language tokens=%d want 220", got)
+	}
+	ra := agg.byRepo[filepath.Base(repo)]
+	if ra == nil {
+		t.Fatal("missing repo aggregate")
+	}
+	if ra.language != "Go" {
+		t.Fatalf("repo language=%q want Go", ra.language)
+	}
+	if !ra.buildSystems["Go modules"] {
+		t.Fatalf("expected Go modules build system, got %#v", ra.buildSystems)
+	}
+	if !ra.testCommands["go test ./..."] {
+		t.Fatalf("expected test command, got %#v", ra.testCommands)
+	}
+	if ra.fileTypes["Go"] != 1 || ra.fileTypes["Markdown"] != 1 {
+		t.Fatalf("unexpected file types: %#v", ra.fileTypes)
+	}
+	if agg.gitCommands["status"] != 1 {
+		t.Fatalf("expected git status command, got %#v", agg.gitCommands)
+	}
+}
+
 func TestEstimateCost(t *testing.T) {
 	d := tokenUsage{Input: 1_000_000, CachedInput: 500_000, Output: 1_000_000}
 	cost, ok := estimateCost(d, "gpt-5.4")
 	if !ok {
 		t.Fatal("expected gpt-5.4 to be priced")
 	}
-	// 0.5M*1.25 + 0.5M*0.125 + 1M*10 = 0.625 + 0.0625 + 10 = 10.6875
-	if cost < 10.68 || cost > 10.69 {
-		t.Fatalf("cost=%f want ~10.6875", cost)
+	// 0.5M*2.50 + 0.5M*0.25 + 1M*15 = 1.25 + 0.125 + 15 = 16.375
+	if cost < 16.37 || cost > 16.38 {
+		t.Fatalf("cost=%f want ~16.375", cost)
+	}
+
+	cost, ok = estimateCost(d, "gpt-5.4-mini")
+	if !ok {
+		t.Fatal("expected gpt-5.4-mini to be priced")
+	}
+	// More specific prefixes must win over the gpt-5.4 family default.
+	if cost < 4.91 || cost > 4.92 {
+		t.Fatalf("cost=%f want ~4.9125", cost)
+	}
+
+	cost, ok = estimateCost(d, "gpt-5.4-nano")
+	if !ok {
+		t.Fatal("expected gpt-5.4-nano to be priced")
+	}
+	if cost < 1.35 || cost > 1.37 {
+		t.Fatalf("cost=%f want ~1.36", cost)
 	}
 	if _, ok := estimateCost(d, "totally-unknown-model"); ok {
 		t.Fatal("unknown model should be unpriced")
