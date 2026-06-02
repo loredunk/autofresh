@@ -1,6 +1,6 @@
 # ADR 0009 — 成绩卡固定文案的 i18n（人工本地化，非模型翻译）
 
-> 状态：提议中 · 日期：2026-06-02 · 相关：[ADR 0008](0008-gamified-shareable-scorecard.md)、
+> 状态：已接受（已实现） · 日期：2026-06-02 · 相关：[ADR 0008](0008-gamified-shareable-scorecard.md)、
 > [`PRD.md`](../PRD.md) §3.11、[`TODO.md`](../TODO.md) T7 · 文案表：[`scorecard-copy.md`](../scorecard-copy.md)
 
 ## 背景

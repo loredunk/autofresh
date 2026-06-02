@@ -123,3 +123,5 @@ Interventions:
 - Prefer "this suggests..." or "likely..." for behavioral inference.
 - Connect each insight to an observable next step.
 - Avoid generic advice that would apply to any report.
+- **Feature-first**: when an intervention can be a native Claude Code / Codex feature, name it.
+  See `feature-mapping.md` for the finding → feature table (verify against current official docs first).

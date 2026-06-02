@@ -1,6 +1,6 @@
 # ADR 0004 — skills 化分析：CLI 产出数据，skill 教 agent 给建议
 
-> 状态：提议中 · 日期：2026-06-02 · 取代 [ADR 0002](0002-ai-analyzed-usage-report.md) 的 D2/D4 与 `advise` 子命令
+> 状态：已接受（已实现） · 日期：2026-06-02 · 取代 [ADR 0002](0002-ai-analyzed-usage-report.md) 的 D2/D4 与 `advise` 子命令
 > · 相关：[`PRD.md`](../PRD.md) §3、[`TODO.md`](../TODO.md) T1
 
 ## 背景

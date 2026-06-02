@@ -136,7 +136,7 @@ report --json / --digest   ──喂──►   agent(Claude Code / Codex) 按 s
 - **离线友好**：CLI 不为分析目的引入网络依赖；分析发生在用户已在用的 agent 侧。
 - **可测试**：CLI 的采集 / digest 逻辑与任何模型解耦，可在无模型环境下单测（沿用 `Build()`/`Run()` 分离）。
 
-### 3.9 三层分析与信号模型
+### 3.9 三层分析与信号模型（已实现）
 
 > 决策见 [`adr/0005-tiered-analysis-and-signals.md`](adr/0005-tiered-analysis-and-signals.md)。
 
@@ -154,7 +154,7 @@ report --json / --digest   ──喂──►   agent(Claude Code / Codex) 按 s
 **prompt 读取边界**：会话 / 项目层可读 user prompt（仅本机、用户发起、转述 + 脱敏、不逐字成片堆叠），
 复用 `references/session-prompt-review.md` 框架；全局层保持纯聚合（零 prompt 文本）。
 
-### 3.10 特性优先建议
+### 3.10 特性优先建议（已实现）
 
 > 决策见 [`adr/0006-feature-first-recommendations.md`](adr/0006-feature-first-recommendations.md)。
 
@@ -169,7 +169,7 @@ report --json / --digest   ──喂──►   agent(Claude Code / Codex) 按 s
 
 给配置建议前须**联网核对最新官方文档**；skill 只建议、不自动改配置。
 
-### 3.11 可分享成绩卡（病毒传播）
+### 3.11 可分享成绩卡（病毒传播）（已实现）
 
 > 决策见 [`adr/0008-gamified-shareable-scorecard.md`](adr/0008-gamified-shareable-scorecard.md)。
 

@@ -1,0 +1,30 @@
+name: CI
+
+on:
+  push:
+    branches: [ ccoach, master ]
+  pull_request:
+
+jobs:
+  go:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+      - run: go build ./...
+      - run: go vet ./...
+      - run: go test ./...
+
+  docs-and-skill:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - name: Docs lint (ADR numbering/status + links)
+        run: python3 tools/check_adrs.py
+      - name: Scorecard regression (no quota%/secret leak, zh/en localized)
+        run: python3 tools/test_scorecard.py

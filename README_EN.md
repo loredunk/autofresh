@@ -13,8 +13,9 @@
 - **Advice** (skill): teaches Claude Code / Codex to interpret this data and give **feature-first** advice —
   whenever a finding can be solved with a native feature (CLAUDE.md/AGENTS.md, subagents, hooks, plan mode,
   permission settings, model/effort tiers…), it names the feature. Supports **session / project / global** scopes.
-- **Shareable scorecard** (planned): grade your usage / habits / prompts across several axes (Prompt Skill,
-  Spending Style, Engineering Sense, Diligence) into a screenshot-friendly card you'll want to share.
+- **Shareable scorecard**: grade your usage / habits / prompts across four axes (Prompt Skill, Spending
+  Style, Engineering Sense, Diligence) into a screenshot-friendly card at the top of the HTML report
+  (bilingual zh/en, rendered by the skill).
 
 > **Privacy**: all analysis runs locally — your prompts never leave your machine.
 

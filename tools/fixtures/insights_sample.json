@@ -1,0 +1,5 @@
+{
+  "executive_summary": "样例摘要：用于回归测试，不代表真实数据。",
+  "recommendations": ["示例建议：把稳定规则写进 CLAUDE.md。"],
+  "insights": [{"title": "示例洞察", "detail": "缓存命中率偏低。"}]
+}

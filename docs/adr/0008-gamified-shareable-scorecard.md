@@ -1,6 +1,6 @@
 # ADR 0008 — 游戏化等级与可分享成绩卡（病毒传播）
 
-> 状态：提议中 · 日期：2026-06-02 · 相关：[ADR 0004](0004-skills-based-analysis.md)（模型写吐槽文案）、
+> 状态：已接受（已实现） · 日期：2026-06-02 · 相关：[ADR 0004](0004-skills-based-analysis.md)（模型写吐槽文案）、
 > [ADR 0005](0005-tiered-analysis-and-signals.md)（prompt 分析、本地隐私）、
 > [ADR 0006](0006-feature-first-recommendations.md)、[`PRD.md`](../PRD.md) §3.11、[`TODO.md`](../TODO.md) T7
 

@@ -65,6 +65,25 @@ type Report struct {
 	Git       GitHabitsReport   `json:"git_habits"`
 	Project   ProjectMgmtReport `json:"project_management"`
 	Codex     CodexConfigReport `json:"codex"`
+
+	// Glossary explains each metric's meaning and caveats so an agent can
+	// interpret the JSON without extra context. It is emitted in JSON output
+	// only (the text renderer ignores it).
+	Glossary map[string]string `json:"glossary,omitempty"`
+}
+
+// reportGlossary is the self-describing field reference for `--json` consumers.
+// Keep keys aligned with the JSON field names above.
+var reportGlossary = map[string]string{
+	"_about":             "仅本机数据，不跨机器汇总；不含任何账户级配额百分比（CLI 下 rate_limits 恒为 null）。",
+	"cache_hit_rate":     "cached_input / input，缓存命中率；越高越省钱（重复上下文被缓存复用）。",
+	"reasoning_ratio":    "reasoning_output / output，推理 token 占输出的比例；偏高常意味任务被反复推理。",
+	"estimated_cost_usd": "估算成本 = token × 内置参考价，仅供参考，不等于实际账单。",
+	"tokens":             "input/cached_input/output/reasoning_output/total，按会话求增量去重后的累计值。",
+	"sources":            "用量来源拆分（CLI / Codex App / IDE 插件等，若可识别）。",
+	"git_habits":         "git 子命令频次与评审/风险信号（如只 diff/status 不 commit）。",
+	"project_management": "各仓库是否有测试/构建/CI，以及文档/配置改动信号。",
+	"duration":           "活跃时长（相邻事件间隔 ≤5 分钟才计入），非墙钟跨度。",
 }
 
 type CommandCount struct {
@@ -226,6 +245,7 @@ func assemble(agg *aggregate, desc, source, home string, loc *time.Location) Rep
 	r.Timezone = fmt.Sprintf("%s (UTC%+d)", zoneName, offset/3600)
 	r.Source = source
 	r.CodexHome = home
+	r.Glossary = reportGlossary
 
 	r.Sessions = len(agg.sessionIDs)
 	r.DurationSeconds = int64(agg.duration.Seconds())

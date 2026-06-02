@@ -41,10 +41,10 @@ skill 侧已上线 `skills/ai-usage-html-report/`，后续在其上**演进**：
 | [0001](adr/0001-record-architecture-decisions.md) | 采用架构决策记录（ADR） | 已接受 |
 | [0002](adr/0002-ai-analyzed-usage-report.md) | AI 用量分析报告：脚本采集 + 本机模型分析 | 部分被 0004 取代 |
 | [0003](adr/0003-npm-distribution.md) | 通过 npm 分发，仓库内 CLI 与 skills 分开 | 提议中（包名随 0007 更名） |
-| [0004](adr/0004-skills-based-analysis.md) | skills 化分析：CLI 产出数据，skill 教 agent 给建议 | 提议中 |
-| [0005](adr/0005-tiered-analysis-and-signals.md) | 分层分析（会话/项目/全局）与信号选择 | 提议中 |
-| [0006](adr/0006-feature-first-recommendations.md) | 建议优先映射到产品特性（feature-first） | 提议中 |
+| [0004](adr/0004-skills-based-analysis.md) | skills 化分析：CLI 产出数据，skill 教 agent 给建议 | 已接受（已实现） |
+| [0005](adr/0005-tiered-analysis-and-signals.md) | 分层分析（会话/项目/全局）与信号选择 | 已接受（已实现） |
+| [0006](adr/0006-feature-first-recommendations.md) | 建议优先映射到产品特性（feature-first） | 已接受（已实现） |
 | [0007](adr/0007-drop-keepalive-rebrand-ccoach.md) | 剥离保活，聚焦用量分析与建议，更名为 ccoach | 已接受 |
-| [0008](adr/0008-gamified-shareable-scorecard.md) | 游戏化等级与可分享成绩卡（病毒传播） | 提议中 |
-| [0009](adr/0009-i18n-scorecard-copy.md) | 成绩卡固定文案的 i18n（人工本地化，zh/en） | 提议中 |
+| [0008](adr/0008-gamified-shareable-scorecard.md) | 游戏化等级与可分享成绩卡（病毒传播） | 已接受（已实现） |
+| [0009](adr/0009-i18n-scorecard-copy.md) | 成绩卡固定文案的 i18n（人工本地化，zh/en） | 已接受（已实现） |
 </content>

@@ -1,0 +1,57 @@
+{
+  "title": "双平台 AI 使用报告",
+  "generated_at": "2026-06-02",
+  "platforms": {
+    "claude_code": {
+      "platform": "Claude Code",
+      "source": "ccusage (LiteLLM offline pricing)",
+      "active_days": 6,
+      "sessions": 3,
+      "cost_usd": 42.0,
+      "cache_hit_rate": 0.31,
+      "tokens": {"input": 120000, "output": 24000, "cache_read": 58000, "cache_create": 4000, "total": 150000},
+      "date_range": ["2026-05-27", "2026-06-02"],
+      "models": [
+        {"model": "claude-opus-4-8", "cost": 38.0, "input": 100000, "output": 20000, "cache_read": 50000},
+        {"model": "claude-haiku-4-5", "cost": 4.0, "input": 20000, "output": 4000, "cache_read": 8000}
+      ],
+      "daily_series": [],
+      "top_sessions": [],
+      "prompt_signals": {
+        "prompts": 40, "avg_len": 38.0, "structured_ratio": 0.1,
+        "file_ref_ratio": 0.05, "constraint_ratio": 0.12, "correction_rate": 0.55
+      },
+      "behavior": {
+        "generated_for": "x", "sessions": 3, "total_tool_calls": 120,
+        "tools_by_name": [], "top_commands": [],
+        "tool_categories": {"shell": 40, "web": 30, "file": 8, "search": 25, "mcp": 0, "other": 2},
+        "git_habits": [], "languages": [], "languages_unit": "文件",
+        "repos": [{"repo": "a", "sessions": 1, "tokens": 1}, {"repo": "b", "sessions": 1, "tokens": 1}, {"repo": "c", "sessions": 1, "tokens": 1}, {"repo": "d", "sessions": 1, "tokens": 1}],
+        "hours": [{"hour": 23, "tokens": 100, "count": 30}, {"hour": 2, "tokens": 50, "count": 20}, {"hour": 14, "tokens": 80, "count": 10}],
+        "sources": [], "extras": []
+      }
+    },
+    "codex": {
+      "platform": "Codex",
+      "source": "ccoach report --json (today) + ccusage codex (history)",
+      "date_range": ["2026-06-01", "2026-06-02"],
+      "active_days": 2,
+      "cost_usd": 3.0,
+      "cache_hit_rate": 0.5,
+      "tokens": {"input": 1, "output": 1, "cache_read": 1, "reasoning": 1, "total": 4},
+      "models": [],
+      "daily_series": [],
+      "autofresh_today": {"empty": true, "generated_for": "2026-06-02", "timezone": "UTC+0", "sessions": 0, "tokens": {}, "cost_usd": 0, "cache_hit_rate": 0},
+      "behavior": {"tool_categories": {}, "repos": [], "hours": [], "sources": [], "git_habits": [], "languages": [], "top_commands": []}
+    }
+  },
+  "combined": {
+    "total_cost_usd": 45.0,
+    "total_tokens": 156000,
+    "total_sessions": 3,
+    "prompt_signals": {
+      "prompts": 40, "avg_len": 38.0, "structured_ratio": 0.1,
+      "file_ref_ratio": 0.05, "constraint_ratio": 0.12, "correction_rate": 0.55
+    }
+  }
+}

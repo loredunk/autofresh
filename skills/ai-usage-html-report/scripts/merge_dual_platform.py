@@ -230,6 +230,7 @@ def build_claude(cc_daily, cc_session, cc_behavior=None):
         daily_series=series,
         top_sessions=top,
         behavior=claude_behavior(cc_behavior),
+        prompt_signals=(cc_behavior or {}).get("prompt_signals", {}),
     )
 
 
@@ -317,6 +318,7 @@ def main():
             total_cost_usd=round(claude["cost_usd"] + codex["cost_usd"], 2),
             total_tokens=claude["tokens"]["total"] + codex["tokens"]["total"],
             total_sessions=claude["sessions"],  # codex session count not in ccusage daily
+            prompt_signals=(cc_behavior or {}).get("prompt_signals", {}),
         ),
     )
     Path(a.output).write_text(json.dumps(merged, indent=2, ensure_ascii=False))

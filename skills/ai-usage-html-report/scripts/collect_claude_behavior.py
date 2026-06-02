@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Collect a Claude Code *behavior* profile from local ~/.claude/projects/**/*.jsonl
-transcripts, mirroring the autofresh/codexreport JSON field shapes so the dual
+transcripts, mirroring the ccoach/codexreport JSON field shapes so the dual
 renderer can show both platforms symmetrically.
 
 Pure python3 standard library, zero pip, offline, no network.
@@ -10,6 +10,11 @@ Window filtering (by record timestamp, converted to local tz):
   --days  N            last N local days including today
   --date  YYYY-MM-DD   a single local day
   (default: full history)
+
+Scope (--scope, default global):
+  global   one aggregate across everything (back-compatible default)
+  project  also emit projects[] (per-project behavior, keyed by cwd basename)
+  session  also emit sessions_detail[] (per-session behavior)
 
 Output (JSON to --output or stdout), field names aligned with
 internal/codexreport JSON tags where they overlap:
@@ -23,10 +28,14 @@ internal/codexreport JSON tags where they overlap:
   git_habits{command_count, top_subcommands[]},
   project_management{build_test_commands[], file_change_types[]},
   languages[]{name, files},
-  sources{entrypoints[], permission_modes[], subagent_calls, subagent_share}
+  sources{entrypoints[], permission_modes[], subagent_calls, subagent_share},
+  prompt_signals{prompts, avg_len, structured_ratio, file_ref_ratio,
+                 constraint_ratio, correction_rate}
 
 PRIVACY (hard rules):
   - never emit prompt text, thinking text, tool_result content, or file contents
+  - user prompt text is read transiently to derive NUMERIC signals only; it is
+    never stored, never emitted, and assistant replies are never read
   - Bash command -> first token only (or git subcommand); never full command line
   - repo -> basename of cwd (or git repo name); never absolute path text
   - file_path -> extension only; never the path
@@ -35,6 +44,7 @@ import argparse
 import datetime
 import json
 import os
+import re
 from collections import Counter, defaultdict
 from pathlib import Path
 
@@ -63,6 +73,21 @@ SHELL_TOOLS = {"Bash"}
 WEB_TOOLS = {"WebFetch", "WebSearch"}
 FILE_TOOLS = {"Edit", "Write", "Read", "NotebookEdit"}
 SEARCH_TOOLS = {"Glob", "Grep", "ToolSearch"}
+
+# --- prompt-quality signal vocabularies (privacy-safe: matched, never stored) ---
+CONSTRAINT_WORDS_EN = ("must", "should", "don't", "do not", "only", "never",
+                       "ensure", "require", "avoid", "without", "acceptance")
+CONSTRAINT_WORDS_ZH = ("必须", "应该", "不要", "不能", "只", "确保", "需要",
+                       "避免", "禁止", "验收", "务必")
+CORRECTION_STARTS_EN = ("actually", "instead", "wait", "no,", "no ", "not ",
+                        "sorry", "oops", "rather")
+CORRECTION_STARTS_ZH = ("不对", "重来", "不是", "错了", "应该是", "改成",
+                        "其实", "等等", "算了")
+SECRET_RE = re.compile(
+    r"(sk-[A-Za-z0-9]{6,}|ghp_[A-Za-z0-9]{6,}|AKIA[0-9A-Z]{10,}"
+    r"|xox[baprs]-[A-Za-z0-9-]{6,})")
+LIST_RE = re.compile(r"(^|\n)\s*([-*•]|\d+[.)])\s+")
+FILE_REF_RE = re.compile(r"@[\w./\-]+")
 
 # file extension -> language label
 EXT_LANG = {
@@ -168,7 +193,114 @@ def repo_name(cwd):
     return name or "(unknown)"
 
 
-def collect(projects_dir, start, end, tz):
+def user_text(msg):
+    """Concatenate user-authored text from a Claude Code user message.
+
+    Read transiently to derive numeric signals; NEVER stored or emitted. Only
+    `type == "text"` blocks (or a plain string) count as human-typed; tool_result
+    / image / other blocks are ignored, so this never reads tool output.
+    """
+    content = msg.get("content")
+    if isinstance(content, str):
+        return content
+    if not isinstance(content, list):
+        return ""
+    parts = []
+    for c in content:
+        if isinstance(c, str):
+            parts.append(c)
+        elif isinstance(c, dict) and c.get("type") == "text":
+            t = c.get("text")
+            if isinstance(t, str):
+                parts.append(t)
+    return "\n".join(parts)
+
+
+def new_prompt_acc():
+    return dict(count=0, len_sum=0, structured=0, file_ref=0,
+                constraint=0, correction=0)
+
+
+def prompt_acc_update(acc, text):
+    """Update prompt-quality counters from one user message. `text` is local
+    and transient: we derive booleans/length only and never keep it."""
+    if not isinstance(text, str):
+        return
+    text = text.strip()
+    if not text:
+        return
+    # ignore obvious command-output / system-injected pastes with secrets only
+    acc["count"] += 1
+    acc["len_sum"] += len(text)
+    low = text.lower()
+    if "```" in text or LIST_RE.search(text):
+        acc["structured"] += 1
+    if FILE_REF_RE.search(text):
+        acc["file_ref"] += 1
+    if any(w in low for w in CONSTRAINT_WORDS_EN) or \
+       any(w in text for w in CONSTRAINT_WORDS_ZH):
+        acc["constraint"] += 1
+    if low.startswith(CORRECTION_STARTS_EN) or \
+       any(text.startswith(w) for w in CORRECTION_STARTS_ZH):
+        acc["correction"] += 1
+
+
+def prompt_signals(acc):
+    n = acc["count"]
+    if not n:
+        return dict(prompts=0, avg_len=0, structured_ratio=0.0,
+                    file_ref_ratio=0.0, constraint_ratio=0.0,
+                    correction_rate=0.0)
+    return dict(
+        prompts=n,
+        avg_len=round(acc["len_sum"] / n, 1),
+        structured_ratio=round(acc["structured"] / n, 4),
+        file_ref_ratio=round(acc["file_ref"] / n, 4),
+        constraint_ratio=round(acc["constraint"] / n, 4),
+        correction_rate=round(acc["correction"] / n, 4),
+    )
+
+
+def new_group():
+    return dict(sessions=set(), tokens=0, cache_read=0, input=0,
+                tool_calls=0, cat=Counter(), git=Counter(),
+                prompt=new_prompt_acc(), first=None, last=None, repo=None)
+
+
+def group_touch_ts(g, dt):
+    if dt is None:
+        return
+    if g["first"] is None or dt < g["first"]:
+        g["first"] = dt
+    if g["last"] is None or dt > g["last"]:
+        g["last"] = dt
+
+
+def group_emit(key, g, is_session):
+    denom = g["cache_read"] + g["input"]
+    chr_ = round(g["cache_read"] / denom, 4) if denom else 0.0
+    dur = 0
+    if g["first"] and g["last"]:
+        dur = int((g["last"] - g["first"]).total_seconds())
+    out = dict(
+        tokens=g["tokens"],
+        tool_calls=g["tool_calls"],
+        cache_hit_rate=chr_,
+        categories=dict(g["cat"]),
+        git_top=[dict(command=k, count=v) for k, v in g["git"].most_common(6)],
+        prompt_signals=prompt_signals(g["prompt"]),
+    )
+    if is_session:
+        out["session_id"] = key
+        out["repo"] = g["repo"] or "(unknown)"
+        out["duration_seconds"] = dur
+    else:
+        out["repo"] = key
+        out["sessions"] = len(g["sessions"])
+    return out
+
+
+def collect(projects_dir, start, end, tz, scope="global"):
     sessions = set()
     tok = dict(input=0, cached_input=0, output=0, total=0)
     cache_read_total = 0
@@ -190,6 +322,9 @@ def collect(projects_dir, start, end, tz):
     permission_modes = Counter()
     subagent_calls = 0
     record_count = 0
+
+    prompt_glob = new_prompt_acc()
+    groups = defaultdict(new_group)  # keyed by sid or repo when scope != global
 
     files = sorted(Path(projects_dir).rglob("*.jsonl"))
     for fp in files:
@@ -244,6 +379,28 @@ def collect(projects_dir, start, end, tz):
 
                 record_count += 1
 
+                # --- scope grouping key ---
+                gkey = None
+                if scope == "session" and sid:
+                    gkey = sid
+                elif scope == "project" and cwd:
+                    gkey = repo_name(cwd)
+                g = groups[gkey] if gkey is not None else None
+                if g is not None:
+                    group_touch_ts(g, dt)
+                    if sid:
+                        g["sessions"].add(sid)
+                    if g["repo"] is None and cwd:
+                        g["repo"] = repo_name(cwd)
+
+                # --- user prompts: derive numeric signals only (never store) ---
+                if rtype == "user":
+                    txt = user_text(r.get("message") or {})
+                    prompt_acc_update(prompt_glob, txt)
+                    if g is not None:
+                        prompt_acc_update(g["prompt"], txt)
+                    continue
+
                 if rtype != "assistant":
                     continue
 
@@ -262,6 +419,10 @@ def collect(projects_dir, start, end, tz):
 
                 if cwd:
                     repos[repo_name(cwd)]["tokens"] += msg_total
+                if g is not None:
+                    g["tokens"] += msg_total
+                    g["cache_read"] += cr
+                    g["input"] += in_t
 
                 if dt is not None:
                     h = dt.astimezone(tz).hour
@@ -278,11 +439,15 @@ def collect(projects_dir, start, end, tz):
                     total_calls += 1
                     if cwd:
                         repos[repo_name(cwd)]["tool_calls"] += 1
+                    if g is not None:
+                        g["tool_calls"] += 1
 
                     inp = c.get("input") or {}
                     if name in SHELL_TOOLS:
                         shell_calls += 1
                         cat["shell"] += 1
+                        if g is not None:
+                            g["cat"]["shell"] += 1
                         ft = first_token(inp.get("command", ""))
                         if ft:
                             bash_first[ft] += 1
@@ -290,14 +455,20 @@ def collect(projects_dir, start, end, tz):
                                 gs = git_subcommand(inp.get("command", ""))
                                 if gs:
                                     git_sub[gs] += 1
+                                    if g is not None:
+                                        g["git"][gs] += 1
                             elif ft in BUILD_TEST_FIRST:
                                 build_test[ft] += 1
                     elif name in WEB_TOOLS:
                         web_searches += 1
                         cat["web"] += 1
+                        if g is not None:
+                            g["cat"]["web"] += 1
                     elif name in FILE_TOOLS:
                         file_changes += 1
                         cat["file"] += 1
+                        if g is not None:
+                            g["cat"]["file"] += 1
                         ext = ext_of(inp.get("file_path", ""))
                         if ext:
                             file_ext[ext] += 1
@@ -306,10 +477,16 @@ def collect(projects_dir, start, end, tz):
                             file_change_types[f"{kind}:{ext}"] += 1
                     elif name in SEARCH_TOOLS:
                         cat["search"] += 1
+                        if g is not None:
+                            g["cat"]["search"] += 1
                     elif name.startswith("mcp__"):
                         cat["mcp"] += 1
+                        if g is not None:
+                            g["cat"]["mcp"] += 1
                     else:
                         cat["other"] += 1
+                        if g is not None:
+                            g["cat"]["other"] += 1
 
     # ---- assemble repos list (codexreport RepoReport shape subset) ----
     repos_out = []
@@ -337,7 +514,7 @@ def collect(projects_dir, start, end, tz):
     denom = cache_read_total + tok["input"]
     chr_ = (cache_read_total / denom) if denom else 0.0
 
-    return dict(
+    result = dict(
         sessions=len(sessions),
         records=record_count,
         tokens=tok,
@@ -377,7 +554,25 @@ def collect(projects_dir, start, end, tz):
             subagent_share=round(subagent_calls / record_count, 4)
             if record_count else 0.0,
         ),
+        prompt_signals=prompt_signals(prompt_glob),
     )
+
+    if scope == "project":
+        projects = [group_emit(k, g, is_session=False)
+                    for k, g in groups.items()]
+        projects.sort(key=lambda x: -x["tokens"])
+        result["scope"] = "project"
+        result["projects"] = projects
+    elif scope == "session":
+        detail = [group_emit(k, g, is_session=True)
+                  for k, g in groups.items()]
+        detail.sort(key=lambda x: -x["tokens"])
+        result["scope"] = "session"
+        result["sessions_detail"] = detail
+    else:
+        result["scope"] = "global"
+
+    return result
 
 
 def main():
@@ -387,6 +582,8 @@ def main():
     ap.add_argument("--since", default="")
     ap.add_argument("--days", type=int, default=0)
     ap.add_argument("--date", default="")
+    ap.add_argument("--scope", choices=["global", "project", "session"],
+                    default="global")
     ap.add_argument("--output", default="")
     a = ap.parse_args()
 
@@ -394,7 +591,7 @@ def main():
     tzname = datetime.datetime.now(tz).strftime("%Z") or "local"
     start, end, label = parse_window(a, tz)
 
-    result = collect(a.projects_dir, start, end, tz)
+    result = collect(a.projects_dir, start, end, tz, scope=a.scope)
     result["platform"] = "Claude Code"
     result["generated_for"] = label
     result["timezone"] = tzname
@@ -407,7 +604,8 @@ def main():
         print(f"  sessions={result['sessions']} "
               f"tool_calls={result['tools']['total_calls']} "
               f"repos={len(result['repos'])} "
-              f"window={label}")
+              f"prompts={result['prompt_signals']['prompts']} "
+              f"scope={a.scope} window={label}")
     else:
         print(out)
 

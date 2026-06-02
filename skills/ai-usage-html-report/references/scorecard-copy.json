@@ -1,0 +1,66 @@
+{
+  "_about": "Hand-localized fixed copy for the scorecard (ADR 0009). Tiers are high->low. The 'title'/personality summary paragraph is NOT here — the model writes it in the user's language (ADR 0008 D3).",
+  "ui": {
+    "zh": {
+      "report_title": "AI 用量教练报告",
+      "scorecard": "成绩卡",
+      "tier": "段位",
+      "title_label": "称号",
+      "beats_pct": "超过了 {pct}% 的用户",
+      "axis_prompt": "Prompt 功力",
+      "axis_spending": "烧钱姿势",
+      "axis_engineering": "工程素养",
+      "axis_diligence": "勤奋度",
+      "local_privacy_note": "全部分析在你本地完成，prompt 内容不离开你的机器",
+      "estimate_note": "排名为本地估算，仅供娱乐"
+    },
+    "en": {
+      "report_title": "AI Usage Coach Report",
+      "scorecard": "Scorecard",
+      "tier": "Tier",
+      "title_label": "Title",
+      "beats_pct": "Beats {pct}% of users",
+      "axis_prompt": "Prompt Skill",
+      "axis_spending": "Spending Style",
+      "axis_engineering": "Engineering Sense",
+      "axis_diligence": "Diligence",
+      "local_privacy_note": "Analyzed entirely on your machine — your prompts never leave it.",
+      "estimate_note": "Ranking is a local estimate, just for fun."
+    }
+  },
+  "axes": {
+    "prompt": {
+      "tiers": [
+        {"zh_name": "大师级", "en_name": "Prompt Surgeon", "zh_roast": "你的 prompt 像手术刀，一句话直达需求", "en_roast": "Your prompts are a scalpel — one line, straight to the point."},
+        {"zh_name": "老练", "en_name": "Sharpshooter", "zh_roast": "偶尔啰嗦，但基本一击即中", "en_roast": "A little wordy, but you usually land it first try."},
+        {"zh_name": "学徒", "en_name": "Apprentice", "zh_roast": "能用，就是话有点多", "en_roast": "Gets there — just a few too many words."},
+        {"zh_name": "复读机", "en_name": "Broken Record", "zh_roast": "同一个需求换三种说法说给 AI 听", "en_roast": "You pitch the same ask to the AI three different ways."},
+        {"zh_name": "玄学召唤师", "en_name": "Vibe Summoner", "zh_roast": "祈祷 AI 能读懂你的心", "en_roast": "You cast a vibe and pray the AI reads your mind."}
+      ]
+    },
+    "spending": {
+      "tiers": [
+        {"zh_name": "性价比刺客", "en_name": "Value Assassin", "zh_roast": "花得少干得多，刀刀见血", "en_roast": "Spends little, ships a lot — every token earns its keep."},
+        {"zh_name": "理性消费", "en_name": "Sensible Spender", "zh_roast": "该花花该省省，账单很健康", "en_roast": "Spends where it matters. Healthy bill."},
+        {"zh_name": "富哥随意", "en_name": "High Roller", "zh_roast": "成本？不存在的", "en_roast": "Cost? Never heard of it."},
+        {"zh_name": "Opus 锤钉子", "en_name": "Opus for a One-Liner", "zh_roast": "拿最贵的模型干最简单的活", "en_roast": "Summoning Opus to fix a typo."}
+      ]
+    },
+    "engineering": {
+      "tiers": [
+        {"zh_name": "架构师", "en_name": "Architect", "zh_roast": "plan 清晰，一气呵成", "en_roast": "Clear plan, clean execution."},
+        {"zh_name": "工程师", "en_name": "Engineer", "zh_roast": "稳扎稳打，该测的都测了", "en_roast": "Steady hands — tests where they matter."},
+        {"zh_name": "莽夫", "en_name": "Cowboy Coder", "zh_roast": "不写 plan，直接梭哈", "en_roast": "No plan. Just send it."},
+        {"zh_name": "考古学家", "en_name": "Archaeologist", "zh_roast": "一个 session 跨三个无关项目，git diff 看不懂自己干了啥", "en_roast": "One session, three unrelated projects — you can't read your own git diff."}
+      ]
+    },
+    "diligence": {
+      "tiers": [
+        {"zh_name": "劳模", "en_name": "Workhorse", "zh_roast": "天天打卡，AI 都怕你", "en_roast": "Clocks in daily. Even the AI needs a break."},
+        {"zh_name": "996 战士", "en_name": "Crunch Lord", "zh_roast": "早 9 晚 9，深夜还在改 bug", "en_roast": "9-to-9, still fixing bugs at midnight."},
+        {"zh_name": "养生程序员", "en_name": "Zen Coder", "zh_roast": "准点下班，周末不碰键盘", "en_roast": "Logs off on time. Weekends are sacred."},
+        {"zh_name": "周末才想起来", "en_name": "Weekend Warrior", "zh_roast": "周一到周五人间蒸发", "en_roast": "Vanishes Monday through Friday."}
+      ]
+    }
+  }
+}

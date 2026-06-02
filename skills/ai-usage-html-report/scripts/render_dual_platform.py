@@ -192,19 +192,51 @@ def sparkline(series, color):
             f"<polyline points='{pts}' fill='none' stroke='{color}' stroke-width='2'/></svg>")
 
 
-def render(data, insights):
+def scorecard_html(sc):
+    """Render the shareable cover scorecard (vertical, screenshot-friendly).
+
+    `sc` is the JSON from scripts/scorecard.py; fully bilingual via its own copy.
+    """
+    if not sc:
+        return ""
+    parts = ["<section class='scorecard'>"]
+    parts.append(f"<span class='sc-kicker'>{esc(sc.get('scorecard_label', ''))} · "
+                 f"{esc(sc.get('title_label', ''))}</span>")
+    parts.append(f"<h2 class='sc-title'>{esc(sc.get('title', ''))}</h2>")
+    if sc.get("rank_label"):
+        parts.append(f"<p class='sc-rank'>{esc(sc['rank_label'])}</p>")
+    for ax in sc.get("axes", []):
+        parts.append(
+            "<div class='sc-axis'>"
+            f"<span class='sc-ax-label'>{esc(ax.get('label'))}</span>"
+            f"<span class='sc-tier'>{esc(ax.get('tier'))}</span>"
+            f"<span class='sc-roast'>{esc(ax.get('roast'))}</span>"
+            "</div>")
+    note = " · ".join(x for x in (sc.get("privacy_note"), sc.get("estimate_note")) if x)
+    if note:
+        parts.append(f"<p class='sc-note'>{esc(note)}</p>")
+    parts.append("</section>")
+    return "".join(parts)
+
+
+def render(data, insights, scorecard=None, lang="zh"):
     cc = data["platforms"]["claude_code"]
     cx = data["platforms"]["codex"]
     comb = data["combined"]
     title = data.get("title", "双平台 AI 使用报告")
+    htmllang = "en" if lang == "en" else "zh-CN"
 
     p = [
-        "<!doctype html><html lang='zh-CN'><head><meta charset='utf-8'>",
+        f"<!doctype html><html lang='{htmllang}'><head><meta charset='utf-8'>",
         "<meta name='viewport' content='width=device-width, initial-scale=1'>",
         f"<title>{esc(title)}</title><style>", CSS, "</style></head><body><main>",
         f"<header><h1>{esc(title)}</h1>"
-        f"<p>生成于 {esc(data.get('generated_at'))} · 数据来源：ccusage(Claude Code, 离线 LiteLLM 定价) + autofresh/ccusage(Codex)</p></header>",
+        f"<p>生成于 {esc(data.get('generated_at'))} · 数据来源：ccusage(Claude Code, 离线 LiteLLM 定价) + ccoach/ccusage(Codex)</p></header>",
     ]
+
+    # shareable cover scorecard (top of the report, screenshot-friendly)
+    if scorecard:
+        p.append(scorecard_html(scorecard))
 
     # combined headline metrics
     p.append("<section class='metrics'>")
@@ -385,6 +417,15 @@ code{font-family:ui-monospace,Menlo,monospace;font-size:12px}ul{margin:0;padding
 .hbar{width:70%;border-radius:2px 2px 0 0;min-height:2px}
 .hlab{font-size:9px;color:var(--muted);margin-top:2px;height:11px}
 ul.sig{margin:4px 0;padding-left:18px}ul.sig li{font-size:12px;color:var(--muted);margin:2px 0}
+.scorecard{max-width:430px;margin:14px auto 22px;padding:20px 22px;border-radius:16px;background:linear-gradient(160deg,#1b2440,#0f1530);color:#fff;box-shadow:0 8px 30px rgba(0,0,0,.25)}
+.scorecard .sc-kicker{font-size:11px;letter-spacing:.12em;text-transform:uppercase;opacity:.65}
+.scorecard .sc-title{margin:4px 0 2px;font-size:23px;line-height:1.25;font-weight:800}
+.scorecard .sc-rank{margin:0 0 12px;font-size:13px;opacity:.85}
+.sc-axis{display:flex;flex-direction:column;padding:10px 0;border-top:1px solid rgba(255,255,255,.12)}
+.sc-axis .sc-ax-label{font-size:11px;opacity:.6}
+.sc-axis .sc-tier{font-size:17px;font-weight:700;margin:1px 0}
+.sc-axis .sc-roast{font-size:12px;opacity:.82}
+.scorecard .sc-note{margin:12px 0 0;font-size:10px;opacity:.55}
 @media(max-width:900px){.metrics,.grid2,.cards{grid-template-columns:1fr}.mbar{grid-template-columns:90px 1fr 70px}}
 """
 
@@ -394,10 +435,15 @@ def main():
     ap.add_argument("--data", required=True)
     ap.add_argument("--insights", required=True)
     ap.add_argument("--output", required=True)
+    ap.add_argument("--scorecard", default="",
+                    help="scorecard JSON from scorecard.py (optional cover card)")
+    ap.add_argument("--lang", choices=["zh", "en"], default="zh")
     a = ap.parse_args()
     data = json.loads(Path(a.data).read_text())
     insights = json.loads(Path(a.insights).read_text())
-    Path(a.output).write_text(render(data, insights), encoding="utf-8")
+    scorecard = json.loads(Path(a.scorecard).read_text()) if a.scorecard else None
+    Path(a.output).write_text(render(data, insights, scorecard=scorecard,
+                                     lang=a.lang), encoding="utf-8")
     print(f"wrote {a.output}")
 
 

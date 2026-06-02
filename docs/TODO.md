@@ -1,96 +1,64 @@
-# TODO — Autofresh
+# TODO — ccoach
 
 > 约定：`[ ]` 待办 · `[~]` 进行中 · `[x]` 完成。优先级 P0 > P1 > P2。
 > 最近更新：2026-06-02
 
 ---
 
-## T1 · AI 用量分析（skills 化）（P0，主线）
+## T1 · AI 用量分析（skills 化）（P0）— ✅ 已完成
 
-> 来源：[`PRD.md`](PRD.md) §3 · 决策：[`adr/0004-skills-based-analysis.md`](adr/0004-skills-based-analysis.md)
-> （取代 [ADR 0002](adr/0002-ai-analyzed-usage-report.md) 的「二进制内调模型 / `advise` 子命令」）
->
-> **核心目标**：CLI 产出**语义化全局统计**，由 **skill** 教 Claude Code / Codex 解读并给出
-> 对人有用的建议。职责：CLI 出「料」，skill 出「解读」。
->
-> **注**：skill 不是「待建」——本分支已上线 `skills/ai-usage-html-report/`，后续是**在其上演进**
-> （新增三个 scope 见 T5、特性优先建议见 T6）。
+> 决策：[`adr/0004-skills-based-analysis.md`](adr/0004-skills-based-analysis.md)（已接受）
+> · skill 在已上线的 `skills/ai-usage-html-report/` 上演进。
 
-### T1.1 CLI 数据（出「料」）
-- [ ] 复用 `codexreport.Build()` 产出 Codex 侧聚合。
-- [ ] **调研** Claude Code 本地用量数据源（路径 / 格式 / 可读性）—— 影响数据结构（ADR 0004 OQ1）。
-- [ ] 让 `report --json` 字段**自描述**：每个指标附口径说明（如 `cache_hit_rate` 含义、越高越省）。
-- [ ] 评估是否需要更偏「喂模型」的 `report --digest`（ADR 0004 OQ2）。
-- [ ] 头部固化口径声明：仅本机数据 / 成本为估算 / 不含配额百分比。
-- [ ] 采集逻辑与任何模型解耦，**可在无模型环境下单测**（沿用 Build/Run 分离模式）。
+- [x] 复用 `codexreport.Build()` 产出 Codex 侧聚合。
+- [x] Claude Code 数据源：`~/.claude/projects/**/*.jsonl`（`collect_claude_behavior.py`）。
+- [x] `ccoach --json` 字段**自描述**：`report.go` 新增 `glossary`（各指标口径 + 仅本机 / 不含配额声明）。
+- [x] 采集逻辑与模型解耦，`go test` 覆盖；skill 输出模板「结论/依据/行动项/风险」+ 空态护栏（见 SKILL.md）。
+- [ ]（可选，未做）更偏「喂模型」的 `--digest`：当前 `--json` + `glossary` 已够 agent 消费。
 
-### T1.2 skills 内容（出「解读」）
-- [ ] 编写分析 skill：触发场景 + 操作步骤（如 `autofresh report --json --days 7`）+ 解读阈值 + 输出模板。
-- [ ] 输出模板固定为「结论 / 依据 / 行动项 / 风险与不确定性」。
-- [ ] 口径护栏写进 skill：仅本机数据 / 成本为估算 / **禁止编造配额百分比**。
-- [ ] 同时适配 Claude Code 与 Codex 的 skills 机制（ADR 0004 D4 / OQ1）。
-- [ ] 空态：无数据时引导 agent 给明确提示而非编造。
+## T5 · 三层分析（会话 / 项目 / 全局）（P0）— ✅ 已完成
 
-### T1.3 文档与验收
-- [ ] 在 README / README_EN 增补 skills 安装与使用说明。
-- [ ] 跑通 PRD §3.7 的全部验收清单。
+> 决策：[`adr/0005-tiered-analysis-and-signals.md`](adr/0005-tiered-analysis-and-signals.md)（已接受）
 
----
+- [x] `collect_claude_behavior.py --scope {global,project,session}`：global 聚合 / `projects[]` / `sessions_detail[]`。
+- [x] 会话级当前会话直接分析；项目级定位 `~/.claude/projects/<编码目录>`；Codex 复用 `session_drilldown.py --repo`。
+- [x] 信号只用 user prompt + permission + tool 调用，**不读 / 不导出 assistant 回复**。
+- [x] prompt 边界：会话/项目层读 user prompt 仅产出聚合 `prompt_signals`（不落原文、脱敏）；全局层零 prompt 文本。
 
-## T5 · 三层分析（会话 / 项目 / 全局）（P0，主线）
+## T6 · 特性优先建议（P0）— ✅ 已完成
 
-> 来源：[`PRD.md`](PRD.md) §3.9 · 决策：[`adr/0005-tiered-analysis-and-signals.md`](adr/0005-tiered-analysis-and-signals.md)
->
-> **核心目标**：在 `ai-usage-html-report` skill 上新增三个 scope，信号限定为
-> user prompt + permission + tool 调用，**绝不读 assistant 回复**。
+> 决策：[`adr/0006-feature-first-recommendations.md`](adr/0006-feature-first-recommendations.md)（已接受）
 
-- [ ] skill 新增 scope 维度：会话 / 项目 / 全局，可由参数 / 触发语选择。
-- [ ] **会话级**：定位「当前会话」（优先用 agent 已有上下文；否则最新 session jsonl / id，ADR 0005 OQ1）。
-- [ ] **项目级**：定位 `~/.claude/projects/<cwd 编码目录>/` 的全部会话；Codex 按 repo/cwd 过滤（复用 `session_drilldown.py --repo`）。
-- [ ] **全局级**：保持纯聚合（复用 `collect_claude_behavior.py` + `autofresh report`）。
-- [ ] 信号选择：只用 user prompt + permission + tool 调用；**不读 / 不导出 assistant 回复**。
-- [ ] prompt 边界：会话 / 项目层 user prompt 转述 + 脱敏（复用 `references/session-prompt-review.md`）；全局层零 prompt 文本。
-- [ ] 明确 permission 信号字段（ADR 0005 OQ2）、Codex 项目过滤口径（OQ3）。
+- [x] 新增 `references/feature-mapping.md`（finding → 产品特性表，覆盖 ADR 0006 D2）。
+- [x] `insight-patterns.md` 与 SKILL.md「Analysis Guidance」接入：建议先点名特性、给配置建议前联网核对官方文档、只建议不自动改配置。
 
-## T6 · 特性优先建议（P0，主线）
+## T7 · 可分享成绩卡 + i18n（P1）— ✅ 已完成
 
-> 来源：[`PRD.md`](PRD.md) §3.10 · 决策：[`adr/0006-feature-first-recommendations.md`](adr/0006-feature-first-recommendations.md)
->
-> **核心目标**：诊断结果优先映射到 Claude Code / Codex 原生特性，再补习惯 / 提示类建议。
+> 决策：[`adr/0008-gamified-shareable-scorecard.md`](adr/0008-gamified-shareable-scorecard.md) / [`0009`](adr/0009-i18n-scorecard-copy.md)（均已接受）
 
-- [ ] 把 `references/insight-patterns.md` 的 intervention 系统化为 **finding → feature 映射**。
-- [ ] 新增 / 扩充一份 feature-mapping 参考（覆盖 ADR 0006 D2 的代表性映射，并随特性演进维护）。
-- [ ] 建议排序：先点名特性（CLAUDE.md/AGENTS.md、subagents、hooks、plan mode、permission、effort/模型档位…），后习惯。
-- [ ] 强化「给配置建议前**联网核对官方文档**」（沿用并加硬现有 Analysis Guidance）。
-- [ ] 守住「只建议、不自动改配置」。
+- [x] 四轴段位与阈值（Prompt 功力 / 烧钱姿势 / 工程素养 / 勤奋度）：`scripts/scorecard.py`。
+- [x] `references/scorecard-copy.json`：zh/en 段位名 + 吐槽语 + UI 标签（人工本地化，非直译）。
+- [x] 渲染层封面成绩卡（竖版、可截图、置顶）：`render_dual_platform.py --scorecard --lang zh|en`。
+- [x] 相对排名「超过 X% 用户」：本地估算并标注 estimate；分寸=只损习惯不伤人（文案表）。
+- [ ]（后续）相对排名用真实大盘校准；称号整段由模型按语言现写（已在 SKILL.md 指明，运行时完成）。
 
-## T7 · 可分享成绩卡（病毒传播）（P1）
+## T2 · 边界澄清（P1）— ✅ 已完成
+- [x] README / README_EN / PRD §2 统一「仅本机、不跨机器汇总、成本为估算、不含配额」措辞。
 
-> 来源：[`PRD.md`](PRD.md) §3.11 · 决策：[`adr/0008-gamified-shareable-scorecard.md`](adr/0008-gamified-shareable-scorecard.md)
->
-> **核心目标**：把用量 / 习惯 / prompt 评成**多轴段位**，在 HTML 顶部做一张**可截图、能炫能自嘲**
-> 的成绩卡，借鉴 ccusage 的病毒路径并以习惯 / prompt 维度做差异化。
-
-- [ ] 定义四条轴的段位与阈值：Prompt 功力 / 烧钱姿势 / 工程素养 / 勤奋度（ADR 0008 D1）。
-- [ ] 每个段位配一句吐槽文案；分寸：只损可改变的行为习惯，不攻击能力 / 人格（D5）。
-- [ ] 渲染层新增**封面成绩卡**：竖版、适配手机截图、置于 HTML 顶部（D2）。
-- [ ] 「人格总结」称号由模型生成（喂用量数据，写又准又毒的吐槽；走 skills 化，D3）。
-- [ ] 相对排名钩子「超过 73% 用户」：早期本地估算并标注，后期校准（D4）。
-- [ ] 新增一份段位 / 文案 reference；prompt 全程本地、不上传，并在 README / UI 写明（D6）。
-- [ ] **固定文案 i18n**（ADR 0009）：把 [`scorecard-copy.md`](scorecard-copy.md) 的中英段位名 /
-      吐槽语 / UI 标签落成 skill 内 i18n 资源；按用户语言选用、缺失回退 `en`；段位名 / 吐槽语
-      人工本地化（非直译），称号那段仍由模型按语言现写。
+## T3 · 工程基建（P2）— ✅ 已完成
+- [x] `tools/check_adrs.py`：ADR 编号唯一 / 状态字段 / docs 相对链接校验。
+- [x] `tools/test_scorecard.py`：回归——四轴有段位、zh/en 本地化、估算标注、**不泄配额% / prompt 原文 / 密钥**。
+- [x] `.github/workflows/ci.yml`：`go build/vet/test` + 上述两项检查。
 
 ---
 
-## T4 · npm 分发（P0）
+## T4 · npm 分发（P0）— ⏸ 暂缓（需 NPM_TOKEN + GitHub Actions 执行）
 
-> 来源：[`PRD.md`](PRD.md) §5 · 决策：[`adr/0003-npm-distribution.md`](adr/0003-npm-distribution.md)
->
-> **核心目标**：`npx autofresh` / `npm i -g autofresh` 开箱即用；仓库内 CLI 与 skills 分开发布。
+> 决策：[`adr/0003-npm-distribution.md`](adr/0003-npm-distribution.md)（提议中）。
+> 沙箱无法真正 `npm publish` / `npx` 端到端验证；待提供 npm 凭证与包名归属后落地。
 
 ### T4.1 仓库结构
-- [ ] 落地 monorepo：`packages/cli/`（`autofresh`）+ `packages/skills/`（`@autofresh/skills`），npm workspaces。
+- [ ] 落地 monorepo：`packages/cli/`（`ccoach`）+ `packages/skills/`（`@ccoach/skills`），npm workspaces。
 - [ ] 终定包名 / scope（ADR 0003 OQ1）。
 
 ### T4.2 CLI 二进制分发
@@ -99,26 +67,16 @@
 - [ ] CI 跨平台构建 Go 二进制并发布各平台子包；npm 与 Release 同源、带 checksum（ADR 0003 D4）。
 
 ### T4.3 skills 安装
-- [ ] `@autofresh/skills` 可直接 `npm i` 安装。
-- [ ] `autofresh skills install`：探测并复制到 Claude Code / Codex 的 skills 目录（ADR 0003 OQ3 / 0004 OQ1）。
+- [ ] `@ccoach/skills` 可直接 `npm i` 安装。
+- [ ] `ccoach skills install`：探测并复制到 Claude Code / Codex 的 skills 目录（ADR 0003 OQ3 / 0004 OQ1）。
 
 ---
 
-## T2 · 报告能力增强（P1）
-- [ ] 多机/多账号场景下，文档进一步澄清「仅本机」边界，避免用户误解为全局账单。
-
-## T3 · 工程基建（P2）
-- [ ] 为 `docs/` 加一条 CI 检查：ADR 文件名编号唯一、状态字段合法。
-- [ ] skills 的回归用例：对固定 `report --json` 样本，断言 skill 引导出的建议不越界（不含配额）。
-
----
-
-## 已完成
+## 已完成（历史）
 - [x] 建立 `docs/`：PRD / ADR / TODO 体系（2026-06-02）。
 - [x] 规划 npm 分发与 skills 化分析（ADR 0003 / 0004，2026-06-02）。
 - [x] 规划三层分析与特性优先建议（ADR 0005 / 0006，2026-06-02）。
-- [x] **剥离保活、更名 ccoach、`report` 改为默认命令**（ADR 0007，2026-06-02）：
-      删除 `platform/provider/schedule/config/logging/app` 包，module/二进制/cmd 改 ccoach，
-      `go build`/`go test` 通过。
-- [x] 规划游戏化可分享成绩卡（ADR 0008，2026-06-02）。
+- [x] **剥离保活、更名 ccoach、`report` 改为默认命令**（ADR 0007，2026-06-02）。
+- [x] 规划游戏化可分享成绩卡 + i18n（ADR 0008 / 0009，2026-06-02）。
+- [x] **实现** T1/T5/T6/T7/T2/T3（glossary、三层 scope + prompt 信号、feature-mapping、成绩卡 + zh/en、CI 检查，2026-06-02）。
 </content>

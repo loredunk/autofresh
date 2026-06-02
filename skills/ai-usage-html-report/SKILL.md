@@ -45,6 +45,7 @@ Keep responsibilities separate:
 3. Collect the Claude Code **behavior** profile (local stdlib parser, offline) over the same window:
    - `python3 ${CLAUDE_SKILL_DIR}/scripts/collect_claude_behavior.py --since <START> --output /tmp/claude-behavior.json`
    - Match `<START>`/`--days`/`--date` to the ccoach window so both platforms cover the same span. Default (no flag) is full history.
+   - Add `--scope project` / `--scope session` for per-project / per-session breakdowns (see "Analysis scopes" below). The script also emits `prompt_signals` — numeric prompt-quality aggregates (length, structured/constraint/file-ref ratios, correction rate); **never prompt text, never assistant replies** — which power the scorecard's Prompt Skill axis.
 4. Merge into one dual-platform JSON (both platforms get a unified `behavior` block):
    - `python3 ${CLAUDE_SKILL_DIR}/scripts/merge_dual_platform.py --cc-daily /tmp/cc-daily.json --cc-session /tmp/cc-session.json --cc-behavior /tmp/claude-behavior.json --codex-report /tmp/codex-usage-report.json --codex-ccusage /tmp/cc-codex.json --output /tmp/ai-usage.json`
    - `--cc-behavior` is optional: if omitted, the Claude Code behavior panel degrades gracefully and the Codex behavior panel (from ccoach) still renders.
@@ -56,8 +57,14 @@ Keep responsibilities separate:
    - All fields are optional and backward-compatible: a flat `{"insights": ["string", ...]}` still renders. Use Chinese unless the user asks otherwise.
    - Behavior data is in `platforms.<plat>.behavior` (tools / top_commands / git_habits / languages / repos / hours / sources / extras) for both platforms — ground at least one insight per platform in these behavior numbers.
    - For richer interpretation patterns (evidence → meaning → impact → drilldown → intervention), read `references/insight-patterns.md`; distill those ladders into the `recommendations`/`insights` fields described in `references/dual-insights-schema.md`.
-6. Render HTML:
-   - `python3 ${CLAUDE_SKILL_DIR}/scripts/render_dual_platform.py --data /tmp/ai-usage.json --insights /tmp/ai-usage-insights.json --output ai-usage-report.html`
+6. (Optional) Build the shareable **scorecard** (see "Shareable scorecard" below):
+   - `python3 ${CLAUDE_SKILL_DIR}/scripts/scorecard.py --data /tmp/ai-usage.json --lang zh --output /tmp/scorecard.json`
+   - Pick `--lang zh|en` per the user's language. Then write the personality-summary
+     sentence yourself (in the user's language) into the insights `executive_summary` —
+     the fixed tier names / roasts come from the localized copy table, not from you.
+7. Render HTML:
+   - `python3 ${CLAUDE_SKILL_DIR}/scripts/render_dual_platform.py --data /tmp/ai-usage.json --insights /tmp/ai-usage-insights.json --scorecard /tmp/scorecard.json --lang zh --output ai-usage-report.html`
+   - `--scorecard` is optional; include it to put the screenshot-friendly cover card at the top. Match `--lang` to the scorecard's.
    - Use the user-specified output path if given; otherwise `ai-usage-report.html`.
 
 ### Fallback when ccusage is unavailable
@@ -86,11 +93,32 @@ Use this when the user wants to find expensive or unclear Codex sessions.
 8. Read `references/session-prompt-review.md`, then summarize the session review findings. Fold the key diagnoses into the `insights` strings of `/tmp/ai-usage-insights.json` (or, in the Codex-only fallback, into `session_reviews` of `/tmp/codex-usage-insights.json` per the schema).
 9. Render the HTML again.
 
+## Analysis scopes (session / project / global)
+
+Pick the scope from what the user asks (ADR 0005):
+
+- **Global** (default): cross-project overview. `collect_claude_behavior.py` (no `--scope`) + `ccoach report --json`.
+- **Project**: one project across its sessions. `collect_claude_behavior.py --scope project` (keyed by cwd basename under `~/.claude/projects/`); Codex side use `session_drilldown.py --repo <name>`.
+- **Session**: the current/just-finished session. `collect_claude_behavior.py --scope session` emits `sessions_detail[]`; if the skill is invoked mid-session, analyze the live session directly.
+
+Signal model for every scope: analyze **user prompts + permissions + tool calls only — never assistant replies**. User-prompt analysis is numeric (`prompt_signals`); if you ever quote a prompt (Codex opt-in drilldown only), paraphrase + redact (see `references/session-prompt-review.md`). Global scope stays purely aggregate (no prompt text).
+
+## Shareable scorecard
+
+`scripts/scorecard.py` grades four independent axes — Prompt Skill, Spending Style, Engineering Sense, Diligence — into tier labels + roast lines from `references/scorecard-copy.json` (hand-localized zh/en, ADR 0008/0009). The renderer shows it as a screenshot-friendly cover card.
+
+- Tiers/roasts/UI labels are **fixed localized copy** (the table) — do not translate them yourself; pick `--lang zh|en`.
+- The personality-summary sentence and any deeper roast IS yours to write, in the user's language.
+- Tone: tease changeable **habits**, never ability or the person. The relative rank ("beats X%") is a local **estimate** — keep it labelled as such.
+- Privacy is a selling point: state that all analysis is local and prompt content never leaves the machine.
+
 ## Analysis Guidance
 
 Base all claims on the merged JSON / report data. If a claim is an inference, phrase it as an inference.
 
-Before recommending any platform configuration or feature (CLAUDE.md/AGENTS.md, skills, subagents, hooks, sandbox/model/effort settings), search the web for the latest official Claude Code and Codex documentation and verify the suggestion against it. These tools change quickly, so confirm every configuration recommendation against current docs rather than relying on prior knowledge.
+**Feature-first recommendations**: whenever a finding can be solved with a native Claude Code / Codex feature, recommend that feature by name before any generic habit advice. Use `references/feature-mapping.md` for the finding → feature table (ADR 0006).
+
+Before recommending any platform configuration or feature (CLAUDE.md/AGENTS.md, skills, subagents, hooks, sandbox/model/effort settings, permission/settings), search the web for the latest official Claude Code and Codex documentation and verify the suggestion against it. These tools change quickly, so confirm every configuration recommendation against current docs rather than relying on prior knowledge. Only suggest — never auto-change the user's config.
 
 Prioritize:
 

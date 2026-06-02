@@ -1,6 +1,6 @@
 # ADR 0006 — 建议优先映射到产品特性（feature-first）
 
-> 状态：提议中 · 日期：2026-06-02 · 相关：[ADR 0004](0004-skills-based-analysis.md)、
+> 状态：已接受（已实现） · 日期：2026-06-02 · 相关：[ADR 0004](0004-skills-based-analysis.md)、
 > [ADR 0005](0005-tiered-analysis-and-signals.md)、[`PRD.md`](../PRD.md) §3、[`TODO.md`](../TODO.md) T6
 
 ## 背景
