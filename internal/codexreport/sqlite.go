@@ -2,7 +2,7 @@ package codexreport
 
 // Minimal read-only SQLite reader.
 //
-// This is deliberately tiny: autofresh ships as a single zero-dependency static
+// This is deliberately tiny: ccoach ships as a single zero-dependency static
 // binary, so we cannot pull in a real SQLite driver. We only ever need to do a
 // full table scan of the `threads` table in CODEX_HOME/state_*.sqlite, so this
 // implements just enough of the SQLite file format for that:

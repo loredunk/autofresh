@@ -1,22 +1,27 @@
-# PRD — Autofresh
+# PRD — ccoach
 
 > 状态：草拟中 · 最近更新：2026-06-02
+> · 更名：原 **autofresh**（保活工具）已剥离保活、聚焦用量分析与建议，更名为 **ccoach**（见 [ADR 0007](adr/0007-drop-keepalive-rebrand-ccoach.md)）。
 
-本 PRD 覆盖 autofresh 的整体定位，并重点展开正在规划的 **AI 用量分析报告** 能力。
+本 PRD 覆盖 ccoach 的整体定位，并重点展开 **AI 用量分析与建议** 能力，以及 **可分享成绩卡**。
 
 ---
 
 ## 1. 产品定位
 
-autofresh 是一个跨平台（macOS / Linux）的 **Codex & Claude 用量保活与洞察** 命令行工具：
+ccoach 是一个跨平台（macOS / Linux）的 **本机 AI 用量教练**：只读分析你在 Claude Code / Codex
+上的用量，告诉你**花在哪、哪里浪费、怎么用得更好**，并以**可分享的成绩卡**把结果变成社交货币。
 
-1. **保活（已上线）**：在工作时段内按 `5h10m` 间隔自动触发 Codex / Claude 的轻量 ping，
-   把 5 小时计费窗口「卡」在真正需要用的时段，减少额度浪费。
-2. **洞察（部分上线 → 规划增强）**：只读分析本机用量记录，输出 Token、成本、工具调用、
-   按仓库 / 时段的统计；并由 skill 教 agent 做**分会话 / 项目 / 全局三层**的语义分析，给出
+1. **用量分析（已上线）**：只读本机记录，输出 Token、成本、工具调用、仓库 / 时段 / 语言 /
+   git 习惯 / 配置扫描等。
+2. **使用建议（核心）**：由 skill 教 agent 做**分会话 / 项目 / 全局三层**的语义分析，给出
    **特性优先**的建议（凡能用产品原生特性解决的就点名特性去解决）。
+3. **可分享成绩卡（传播）**：把用量 / 习惯 / prompt 评成多轴段位，做一张可截图、能炫能自嘲的
+   成绩卡（见 §3.11、[ADR 0008](adr/0008-gamified-shareable-scorecard.md)）。
 
-目标用户：重度使用 Claude Code / Codex 的个人开发者，希望「花得值、用在刀刃上」。
+> **不再做保活**：原 autofresh 的 launchd/crontab 保活 ping 已移除（ADR 0007）。
+
+目标用户：重度使用 Claude Code / Codex 的个人开发者，希望「花得值、用在刀刃上」，并乐于分享战绩。
 
 ---
 
@@ -24,13 +29,10 @@ autofresh 是一个跨平台（macOS / Linux）的 **Codex & Claude 用量保活
 
 | 能力 | 命令 | 说明 |
 | --- | --- | --- |
-| 设定保活计划 | `autofresh set 06:00 --target all` | 写入 launchd / crontab |
-| 查看 / 诊断计划 | `autofresh plan` / `doctor` | |
-| 手动触发 | `autofresh trigger` | 打印模型回复，确认保活生效 |
-| 本机 Codex 用量报告 | `autofresh report [--json]` | 只读 `~/.codex` rollout，输出 Token / 成本 / 工具 / 仓库 / 时段 / 来源 / 语言 / git 习惯 / 配置扫描 |
-| 双平台 AI 使用报告 skill | `skills/ai-usage-html-report/` | 已上线：用 ccusage + `autofresh report --json` 数据，产出 Claude Code + Codex 双平台 HTML 报告、行为画像，并支持 Codex 高耗会话钻取 |
+| 本机用量报告（默认命令） | `ccoach [--json --days N --since … --date … --by-repo]` | 只读 `~/.codex` rollout，输出 Token / 成本 / 工具 / 仓库 / 时段 / 来源 / 语言 / git 习惯 / 配置扫描；裸命令即出报告，`ccoach report …` 亦可 |
+| 双平台 AI 使用报告 skill | `skills/ai-usage-html-report/` | 已上线：用 ccusage + `ccoach report --json` 数据，产出 Claude Code + Codex 双平台 HTML 报告、行为画像，并支持 Codex 高耗会话钻取 |
 
-`report --json` 已经是「脚本友好」的结构化输出（见
+`ccoach --json` 已经是「脚本友好」的结构化输出（见
 [`internal/codexreport/report.go`](../internal/codexreport/report.go) 的 `Report` 结构体，
 已含 `Repos / Hours / Sources / Languages / Git / Project / Codex` 等行为维度，由
 [`habits.go`](../internal/codexreport/habits.go) / [`language.go`](../internal/codexreport/language.go) /
@@ -167,6 +169,24 @@ report --json / --digest   ──喂──►   agent(Claude Code / Codex) 按 s
 
 给配置建议前须**联网核对最新官方文档**；skill 只建议、不自动改配置。
 
+### 3.11 可分享成绩卡（病毒传播）
+
+> 决策见 [`adr/0008-gamified-shareable-scorecard.md`](adr/0008-gamified-shareable-scorecard.md)。
+
+既然用 HTML 呈现，就顺势提供**情绪价值 + 社交传播**：把用量评成**多轴独立段位**，做一张可截图的
+成绩卡。对标 ccusage 靠「成本计分卡」病毒传播，ccoach 多了**习惯与 prompt** 两个维度，可以玩得更深。
+
+- **多轴独立评级（不做单一总分）**，让每个人在某条轴上都能拿到「能炫或能笑」的标签：
+  - **Prompt 功力**（核心、独有）：大师级 / 老练 / 学徒 / 复读机 / 玄学召唤师。
+  - **烧钱姿势**（成本 + 值不值）：性价比刺客 / 理性消费 / 富哥随意 / Opus 锤钉子。
+  - **工程素养**（git/session 习惯）：架构师 / 工程师 / 莽夫 / 考古学家。
+  - **勤奋度**（频率，纯娱乐）：劳模 / 996 战士 / 养生程序员 / 周末才想起来。
+- **封面成绩卡**：竖版、适配手机截图、信息密度适中，置于 HTML 顶部；详细分析在下方。
+- **人格总结由模型生成**：把几轴合成一句又准又毒的称号（沿用 skills 化，模型在 agent 侧写）。
+- **对比钩子**：「超过了 73% 的用户」相对排名；早期用本地估算、标注、后期校准。
+- **分寸**：损但不伤人——只吐槽可改变的行为习惯，不攻击能力 / 人格。
+- **隐私即卖点**：prompt 全程本地处理、不上传，并在 README / UI 写明（沿用 §3.8 / ADR 0005）。
+
 ---
 
 ## 4. 度量
@@ -182,22 +202,25 @@ report --json / --digest   ──喂──►   agent(Claude Code / Codex) 按 s
 
 ### 5.1 需求
 
-让用户能用最顺手的方式安装：`npx autofresh` 试用、`npm i -g autofresh` 全局安装；
+让用户能用最顺手的方式安装：`npx ccoach` 试用、`npm i -g ccoach` 全局安装；
 同时把产品的两块交付物——**CLI** 与 **skills**——在同一仓库内清晰分开、各自独立发布。
+
+> 包名随 [ADR 0007](adr/0007-drop-keepalive-rebrand-ccoach.md) 的更名调整：CLI 包 `ccoach`、
+> skills 包 `@ccoach/skills`（ADR 0003 中的 `autofresh` / `@autofresh/skills` 为更名前的旧名）。
 
 ### 5.2 方案
 
-- **单仓库、两包**：`autofresh`（CLI，包装 Go 二进制）+ `@autofresh/skills`（skills 内容）。
+- **单仓库、两包**：`ccoach`（CLI，包装 Go 二进制）+ `@ccoach/skills`（skills 内容）。
 - **CLI 二进制**走「平台专属 optionalDependencies」分发（esbuild 式），对 `npx` 友好、可复现、
   无 postinstall 联网风险。
-- **skills 安装便捷化**：除 `npm i @autofresh/skills` 外，提供 `autofresh skills install`
+- **skills 安装便捷化**：除 `npm i @ccoach/skills` 外，提供 `ccoach skills install`
   把 skills 落到 Claude Code / Codex 的 skills 目录。
 
 ### 5.3 验收标准
 
-- [ ] `npx autofresh report` 可在不预装的情况下直接跑通（当前平台）。
-- [ ] `npm i -g autofresh` 后全局可用 `autofresh`。
-- [ ] skills 可经 `npm i @autofresh/skills` 或 `autofresh skills install` 两条路径安装。
+- [ ] `npx ccoach` 可在不预装的情况下直接跑通（当前平台）。
+- [ ] `npm i -g ccoach` 后全局可用 `ccoach`。
+- [ ] skills 可经 `npm i @ccoach/skills` 或 `ccoach skills install` 两条路径安装。
 - [ ] npm 上的二进制与仓库 CI 同一次构建一致、可校验。
 - [ ] README / README_EN 增补 npm 安装方式（保留二进制下载为备选）。
 </content>

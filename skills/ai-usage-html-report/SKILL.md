@@ -1,10 +1,10 @@
 ---
 name: ai-usage-html-report
-description: Generate an enriched dual-platform (Claude Code + Codex) HTML report of local AI coding usage, built from ccusage and `autofresh report --json` data. Use when the user wants a deeper AI-written review of how they use Claude Code and/or Codex — cost, token, cache, model and active-hours breakdown, habits analysis, project-by-project recommendations, high-token project/session drilldown, or a richer HTML dashboard than the raw text/JSON reports.
+description: Generate an enriched dual-platform (Claude Code + Codex) HTML report of local AI coding usage, built from ccusage and `ccoach report --json` data. Use when the user wants a deeper AI-written review of how they use Claude Code and/or Codex — cost, token, cache, model and active-hours breakdown, habits analysis, project-by-project recommendations, high-token project/session drilldown, or a richer HTML dashboard than the raw text/JSON reports.
 when_to_use: 'Trigger when the user wants to review, analyze, or visualize their local AI coding usage across Claude Code and Codex — for example "how much did I spend on Claude Code / Codex", "how much did I use AI today", "generate an AI usage report", "build an HTML dashboard of my Claude Code and Codex usage", "which projects burned the most tokens", "compare my Claude Code vs Codex usage", "review my most expensive or unclear Codex sessions", "analyze my AI coding habits", or an explicit /ai-usage-html-report invocation.'
 argument-hint: "[YYYY-MM-DD | N (days back)]"
 arguments: period
-allowed-tools: Read Write WebSearch WebFetch Bash(autofresh *) Bash(./autofresh *) Bash(python3 *) Bash(npx *) Bash(ccusage *)
+allowed-tools: Read Write WebSearch WebFetch Bash(ccoach *) Bash(./ccoach *) Bash(python3 *) Bash(npx *) Bash(ccusage *)
 ---
 
 # AI Usage HTML Report (Claude Code + Codex)
@@ -15,27 +15,27 @@ Build a dual-platform local AI usage report. Use authoritative on-disk facts as 
 
 Keep responsibilities separate:
 
-- Data tools (ccusage, `autofresh report`) collect local facts.
+- Data tools (ccusage, `ccoach report`) collect local facts.
 - This skill interprets those facts and produces an enhanced HTML document.
 
 ### Data-layer rules (mandatory)
 
 - **Claude Code data MUST come from `ccusage`.** ccusage reads each `~/.claude/projects/*.jsonl` line for the real per-message model and prices it with offline LiteLLM data, so its model/cost attribution is correct.
 - **NEVER use `~/.claude/stats-cache.json`.** It is polluted by cc-switch swapping in third-party providers (kimi, etc.), so its model/cost attribution is wrong, and it stopped updating after 2026-04-09 — stale and inaccurate. This was confirmed against real data when comparing approaches. Do not read or fall back to it under any circumstances.
-- **Codex data** comes from `autofresh report --since <date> --json` (token *and* behavior: repos/hours/tools/git_habits/project_management/languages/sources over the window) plus `ccusage codex daily` (token/cost history).
+- **Codex data** comes from `ccoach report --since <date> --json` (token *and* behavior: repos/hours/tools/git_habits/project_management/languages/sources over the window) plus `ccusage codex daily` (token/cost history).
 - **Claude Code behavior** comes from `scripts/collect_claude_behavior.py`, which parses `~/.claude/projects/**/*.jsonl` locally (pure stdlib, offline) into the same behavior shape so both platforms render symmetrically. It emits only aggregates: Bash → first word / git subcommand only, repo → cwd basename, file → extension only. Never prompt text, file contents, full commands, or absolute paths.
 
 ## Workflow
 
 ### Daily dual-platform report
 
-1. Locate / build `autofresh`:
-   - Prefer `./autofresh` in the current repo.
-   - Otherwise use `autofresh` from `PATH`.
-   - If neither exists but this is the autofresh source repo, run `GOCACHE=/tmp/autofresh-go-cache go build -o autofresh ./cmd/autofresh`.
-   - Generate the Codex report **over a window** (not just today), so autofresh emits its behavior dimensions (repos/hours/tools/git_habits/project_management/languages/sources):
-     - `./autofresh report --since <START> --json > /tmp/codex-usage-report.json`
-     - Choose `<START>` as the earliest Claude Code activity date or a sensible floor (e.g. start of the current year). autofresh supports `--since YYYY-MM-DD`, `--days N`, and `--date YYYY-MM-DD` (mutually exclusive).
+1. Locate / build `ccoach`:
+   - Prefer `./ccoach` in the current repo.
+   - Otherwise use `ccoach` from `PATH`.
+   - If neither exists but this is the ccoach source repo, run `GOCACHE=/tmp/ccoach-go-cache go build -o ccoach ./cmd/ccoach`.
+   - Generate the Codex report **over a window** (not just today), so ccoach emits its behavior dimensions (repos/hours/tools/git_habits/project_management/languages/sources):
+     - `./ccoach report --since <START> --json > /tmp/codex-usage-report.json`
+     - Choose `<START>` as the earliest Claude Code activity date or a sensible floor (e.g. start of the current year). ccoach supports `--since YYYY-MM-DD`, `--days N`, and `--date YYYY-MM-DD` (mutually exclusive).
      - If invoked with an argument (`$period`): a date like `2026-06-01` maps to `--date $period`; a bare integer like `7` maps to `--days $period`; empty means a wide window via `--since`.
 2. Pull data with `ccusage` (offline, no network, no upload):
    - `npx ccusage@latest claude daily --json --offline --breakdown > /tmp/cc-daily.json`
@@ -44,10 +44,10 @@ Keep responsibilities separate:
    - Use `ccusage ...` directly if it is already on `PATH`; otherwise `npx ccusage@latest ...`.
 3. Collect the Claude Code **behavior** profile (local stdlib parser, offline) over the same window:
    - `python3 ${CLAUDE_SKILL_DIR}/scripts/collect_claude_behavior.py --since <START> --output /tmp/claude-behavior.json`
-   - Match `<START>`/`--days`/`--date` to the autofresh window so both platforms cover the same span. Default (no flag) is full history.
+   - Match `<START>`/`--days`/`--date` to the ccoach window so both platforms cover the same span. Default (no flag) is full history.
 4. Merge into one dual-platform JSON (both platforms get a unified `behavior` block):
    - `python3 ${CLAUDE_SKILL_DIR}/scripts/merge_dual_platform.py --cc-daily /tmp/cc-daily.json --cc-session /tmp/cc-session.json --cc-behavior /tmp/claude-behavior.json --codex-report /tmp/codex-usage-report.json --codex-ccusage /tmp/cc-codex.json --output /tmp/ai-usage.json`
-   - `--cc-behavior` is optional: if omitted, the Claude Code behavior panel degrades gracefully and the Codex behavior panel (from autofresh) still renders.
+   - `--cc-behavior` is optional: if omitted, the Claude Code behavior panel degrades gracefully and the Codex behavior panel (from ccoach) still renders.
 5. Read `/tmp/ai-usage.json`, then write `/tmp/ai-usage-insights.json` following `references/dual-insights-schema.md`.
    - Write the rich AI-interpretation layer the dual renderer expects:
      - `executive_summary` — a prominent paragraph (or short list) covering both platforms.
@@ -62,9 +62,9 @@ Keep responsibilities separate:
 
 ### Fallback when ccusage is unavailable
 
-If `node`/`npx` is missing or `ccusage` fails to run, degrade to a **Codex-only** report from autofresh data:
+If `node`/`npx` is missing or `ccusage` fails to run, degrade to a **Codex-only** report from ccoach data:
 
-- Run `./autofresh report --json > /tmp/codex-usage-report.json`, write `/tmp/codex-usage-insights.json` per `references/insights-schema.md`, and render with `python3 ${CLAUDE_SKILL_DIR}/scripts/render_enriched_codex_report.py --report /tmp/codex-usage-report.json --insights /tmp/codex-usage-insights.json --output codex-report.enriched.html`.
+- Run `./ccoach report --json > /tmp/codex-usage-report.json`, write `/tmp/codex-usage-insights.json` per `references/insights-schema.md`, and render with `python3 ${CLAUDE_SKILL_DIR}/scripts/render_enriched_codex_report.py --report /tmp/codex-usage-report.json --insights /tmp/codex-usage-insights.json --output codex-report.enriched.html`.
 - Tell the user the Claude Code half was skipped and that installing Node/ccusage (`npx ccusage@latest`) enables the dual-platform report.
 - **Never** substitute `~/.claude/stats-cache.json` for the missing Claude Code data — it is wrong and stale (see data-layer rules).
 

@@ -1,3 +1,3 @@
-module autofresh
+module ccoach
 
 go 1.22

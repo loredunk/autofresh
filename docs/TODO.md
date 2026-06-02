@@ -64,6 +64,23 @@
 - [ ] 强化「给配置建议前**联网核对官方文档**」（沿用并加硬现有 Analysis Guidance）。
 - [ ] 守住「只建议、不自动改配置」。
 
+## T7 · 可分享成绩卡（病毒传播）（P1）
+
+> 来源：[`PRD.md`](PRD.md) §3.11 · 决策：[`adr/0008-gamified-shareable-scorecard.md`](adr/0008-gamified-shareable-scorecard.md)
+>
+> **核心目标**：把用量 / 习惯 / prompt 评成**多轴段位**，在 HTML 顶部做一张**可截图、能炫能自嘲**
+> 的成绩卡，借鉴 ccusage 的病毒路径并以习惯 / prompt 维度做差异化。
+
+- [ ] 定义四条轴的段位与阈值：Prompt 功力 / 烧钱姿势 / 工程素养 / 勤奋度（ADR 0008 D1）。
+- [ ] 每个段位配一句吐槽文案；分寸：只损可改变的行为习惯，不攻击能力 / 人格（D5）。
+- [ ] 渲染层新增**封面成绩卡**：竖版、适配手机截图、置于 HTML 顶部（D2）。
+- [ ] 「人格总结」称号由模型生成（喂用量数据，写又准又毒的吐槽；走 skills 化，D3）。
+- [ ] 相对排名钩子「超过 73% 用户」：早期本地估算并标注，后期校准（D4）。
+- [ ] 新增一份段位 / 文案 reference；prompt 全程本地、不上传，并在 README / UI 写明（D6）。
+- [ ] **固定文案 i18n**（ADR 0009）：把 [`scorecard-copy.md`](scorecard-copy.md) 的中英段位名 /
+      吐槽语 / UI 标签落成 skill 内 i18n 资源；按用户语言选用、缺失回退 `en`；段位名 / 吐槽语
+      人工本地化（非直译），称号那段仍由模型按语言现写。
+
 ---
 
 ## T4 · npm 分发（P0）
@@ -100,4 +117,8 @@
 - [x] 建立 `docs/`：PRD / ADR / TODO 体系（2026-06-02）。
 - [x] 规划 npm 分发与 skills 化分析（ADR 0003 / 0004，2026-06-02）。
 - [x] 规划三层分析与特性优先建议（ADR 0005 / 0006，2026-06-02）。
+- [x] **剥离保活、更名 ccoach、`report` 改为默认命令**（ADR 0007，2026-06-02）：
+      删除 `platform/provider/schedule/config/logging/app` 包，module/二进制/cmd 改 ccoach，
+      `go build`/`go test` 通过。
+- [x] 规划游戏化可分享成绩卡（ADR 0008，2026-06-02）。
 </content>
