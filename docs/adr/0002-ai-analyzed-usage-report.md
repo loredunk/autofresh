@@ -1,6 +1,13 @@
 # ADR 0002 — AI 用量分析报告：脚本采集 + 本机模型分析
 
-> 状态：提议中 · 日期：2026-06-02 · 相关：[`PRD.md`](../PRD.md) §3、[`TODO.md`](../TODO.md) T1
+> 状态：**部分被 [ADR 0004](0004-skills-based-analysis.md) 取代** · 日期：2026-06-02
+> · 相关：[`PRD.md`](../PRD.md) §3、[`TODO.md`](../TODO.md) T1
+>
+> **取代说明**：本 ADR 设想由 autofresh 二进制**自己**调用本机 LLM 出建议（D2/D4 及
+> `advise` 子命令）。后续决定改为 **skills 化**——CLI 只负责产出语义化数据，由 skill 教
+> Claude Code / Codex 去分析（见 [ADR 0004](0004-skills-based-analysis.md)）。
+> 仍然成立的部分：**D1**（采集/分析解耦、digest 作为稳定中间产物）、**D3**（隐私/可预览）、
+> **D5**（口径护栏）——这些被 0004 沿用，只是护栏的执行者从二进制变成了 skill 指令。
 
 ## 背景
 

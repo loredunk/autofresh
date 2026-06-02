@@ -59,65 +59,64 @@ autofresh 是一个跨平台（macOS / Linux）的 **Codex & Claude 用量保活
 - 作为多工具用户，我想同时看到 **Claude Code 与 Codex** 两侧的统计被放在一起对比与点评。
 - 作为注重隐私的用户，我想**自己决定**把哪些数据发给模型，并能先**预览将要发送的内容**。
 
-### 3.4 方案概述
+### 3.4 方案概述（skills 化）
 
-复用已有的 provider 调用层（[`internal/provider/provider.go`](../internal/provider/provider.go)
-已封装 `codex exec` 与 `claude -p`），新增一条分析流水线：
+> 方案已调整：不再由 autofresh 二进制自己调模型，而是 **CLI 出数据 + skill 教 agent 解读**。
+> 决策见 [`adr/0004-skills-based-analysis.md`](adr/0004-skills-based-analysis.md)
+> （取代 [ADR 0002](adr/0002-ai-analyzed-usage-report.md) 的「二进制内调模型 / `advise` 子命令」）。
+
+职责切分如下：
 
 ```
-采集脚本 ──► 语义化 JSON（含字段释义/口径说明）──► 组装分析 Prompt ──► 调用本机 LLM ──► 建议报告
- (collect)        (digest)                          (prompt)          (codex/claude)     (advise)
+CLI（产出料）                         skill（产出解读）
+report --json / --digest   ──喂──►   agent(Claude Code / Codex) 按 skill 指引解读 ──► 对人有用的建议
+自描述、语义化、稳定的数据             触发场景 + 操作步骤 + 解读阈值 + 输出模板 + 口径护栏
 ```
 
-1. **采集（collect）**：脚本汇总全局统计。Codex 侧复用 `report` 的聚合；Claude Code 侧
-   新增对其本地用量数据的读取（见 TODO T1.1 的调研项）。
-2. **语义化（digest）**：把统计打包成**自带释义**的 JSON——每个指标附口径说明（如
-   "cache_hit_rate=缓存输入/总输入，越高越省钱"），降低模型误读概率。
-3. **分析（advise）**：把 digest 作为上下文，连同一段固定的分析指令发给本机 LLM，
-   要求其输出结构化建议（结论 + 依据 + 行动项 + 风险/不确定性）。
-4. **呈现**：默认渲染为可读文本；`--json` 时输出结构化建议，便于二次消费。
+1. **CLI**：把全局统计输出成**自描述、语义化、稳定**的结构化数据——每个指标自带口径说明
+   （如 `cache_hit_rate=缓存输入/总输入，越高越省钱`），让 agent 无需额外上下文即可读懂。
+   Codex 侧复用现有聚合；Claude Code 侧数据源待调研（TODO T1.1）。
+2. **skill**：用自然语言教 agent——何时运行哪条命令、如何解读各指标、输出怎样的建议。
+   skill 是产品的第二部分交付物，独立打包为 `@autofresh/skills`（见 §5、ADR 0003）。
+3. **使用**：用户在自己常用的 Claude Code / Codex 里直接问「我的用量怎么样、怎么省」，
+   agent 运行 CLI、按 skill 给出结论。分析所用模型天然就是用户当前 agent。
 
-### 3.5 交互草案（待 ADR/实现细化）
+### 3.5 skill 内容草案（待实现细化）
 
-```bash
-autofresh advise                      # 默认：今天，本机 Codex + Claude，调用本机模型给出建议
-autofresh advise --days 7             # 最近 7 天
-autofresh advise --target codex       # 只分析 codex
-autofresh advise --provider claude    # 指定用哪个模型来做分析（与被分析对象解耦）
-autofresh advise --dry-run            # 只打印「将要发送给模型的内容」，不实际调用（隐私预览）
-autofresh advise --json               # 结构化建议输出
-```
+每个 skill 至少包含：
 
-> 命令名 `advise` vs 复用 `report --advise` 为待定项，见
-> [`adr/0002-ai-analyzed-usage-report.md`](adr/0002-ai-analyzed-usage-report.md)。
+- **触发场景**：用户询问用量 / 花销 / 如何省额度 / 保活窗口是否合理。
+- **操作步骤**：建议运行的命令，如 `autofresh report --json --days 7`。
+- **解读指南**：各指标含义与经验阈值（缓存命中率偏低 → 提示复用上下文；reasoning 占比过高 → 提示精简任务）。
+- **输出模板**：结论 / 依据 / 行动项 / 风险与不确定性。
+- **口径护栏**：强制声明「仅本机数据 / 成本为估算 / **不得编造配额百分比**」。
 
 ### 3.6 范围
 
 **In scope（本期）**
-- 复用 Codex 侧已有聚合，产出语义化 digest。
-- 调用本机 LLM 生成建议报告（文本 + JSON）。
-- `--dry-run` 隐私预览；不联网、不上传到第三方服务（只走用户已登录的本机 CLI）。
+- 增强 CLI 数据：让 `report --json`（及可能的 `--digest`）成为 agent 可直接消费的语义化数据。
+- 产出 `@autofresh/skills`：面向 Claude Code 与 Codex 的分析 skill 内容。
+- 隐私护栏写进 skill 指令（仅本机、估算成本、禁配额幻觉）。
 
 **Out of scope（本期不做）**
+- 在二进制内调用 LLM / `autofresh advise` 子命令（已被 ADR 0004 取消）。
 - 跨机器汇总用量（受 rollout 机器隔离约束）。
 - 真实账单 / 配额百分比（口径限制，见 §2 边界）。
-- 自动按建议「改计划」（先只给建议，执行由用户确认）。
+- skill 自动「改保活计划」（先只给建议，执行由人确认）。
 
 ### 3.7 验收标准
 
-- [ ] `autofresh advise` 在有用量数据时输出包含「结论 / 依据 / 行动项」的报告。
-- [ ] 无数据时给出明确的空态提示，而非报错或空白。
-- [ ] `--dry-run` 能完整展示「即将发送的内容」，且此时**不**调用任何模型。
-- [ ] 本机缺少对应 CLI（codex/claude）时给出可操作的错误提示（复用 provider 的失败文案风格）。
-- [ ] `--json` 输出可被脚本解析（稳定字段）。
-- [ ] 报告显式标注「成本为估算、仅本机数据、不含配额」等口径，避免误导。
+- [ ] `report --json`（及 `--digest`，若引入）字段自描述、口径清晰，agent 无需额外上下文即可解读。
+- [ ] `@autofresh/skills` 提供至少一个可用 skill，能引导 agent 产出「结论 / 依据 / 行动项」的建议。
+- [ ] skill 中固化口径护栏，agent 不会输出配额百分比等越界结论。
+- [ ] 无用量数据时，skill 指引 agent 给出明确空态提示而非编造。
+- [ ] 数据/口径稳定：字段含义不随版本静默漂移（破坏性变更需版本标注）。
 
 ### 3.8 非功能性要求
 
-- **隐私优先**：默认不外发；发送内容用户可预览、可裁剪；文档明确说明数据流向。
-- **离线友好**：除调用本机已登录的 codex/claude 外，不引入新的网络依赖。
-- **可测试**：采集与 digest 逻辑与 LLM 调用解耦，digest 可在无模型环境下单测（沿用现有
-  `Build()` 与 `Run()` 分离的模式）。
+- **隐私优先**：CLI 默认只读、不外发；数据是否交给 agent 由用户自身操作决定，文档说明数据流向。
+- **离线友好**：CLI 不为分析目的引入网络依赖；分析发生在用户已在用的 agent 侧。
+- **可测试**：CLI 的采集 / digest 逻辑与任何模型解耦，可在无模型环境下单测（沿用 `Build()`/`Run()` 分离）。
 
 ---
 
@@ -125,4 +124,31 @@ autofresh advise --json               # 结构化建议输出
 
 - 采纳率：用户看到建议后是否调整了保活计划 / 使用习惯（可由后续 `plan` 变更间接观察）。
 - 可信度：建议中是否出现与口径冲突的表述（如声称配额百分比）——目标为 0。
+
+---
+
+## 5. 分发与安装
+
+> 决策见 [`adr/0003-npm-distribution.md`](adr/0003-npm-distribution.md)。
+
+### 5.1 需求
+
+让用户能用最顺手的方式安装：`npx autofresh` 试用、`npm i -g autofresh` 全局安装；
+同时把产品的两块交付物——**CLI** 与 **skills**——在同一仓库内清晰分开、各自独立发布。
+
+### 5.2 方案
+
+- **单仓库、两包**：`autofresh`（CLI，包装 Go 二进制）+ `@autofresh/skills`（skills 内容）。
+- **CLI 二进制**走「平台专属 optionalDependencies」分发（esbuild 式），对 `npx` 友好、可复现、
+  无 postinstall 联网风险。
+- **skills 安装便捷化**：除 `npm i @autofresh/skills` 外，提供 `autofresh skills install`
+  把 skills 落到 Claude Code / Codex 的 skills 目录。
+
+### 5.3 验收标准
+
+- [ ] `npx autofresh report` 可在不预装的情况下直接跑通（当前平台）。
+- [ ] `npm i -g autofresh` 后全局可用 `autofresh`。
+- [ ] skills 可经 `npm i @autofresh/skills` 或 `autofresh skills install` 两条路径安装。
+- [ ] npm 上的二进制与仓库 CI 同一次构建一致、可校验。
+- [ ] README / README_EN 增补 npm 安装方式（保留二进制下载为备选）。
 </content>

@@ -16,11 +16,24 @@
 
 ## 当前主线
 
-近期主线是把现有的 `autofresh report`（只读、脚本友好的本机 Codex 用量报告）升级为
-**「脚本采集全局统计 → 大模型语义分析 → 输出建议报告」** 的闭环，覆盖 Claude Code 与 Codex 两侧。
+产品分两块交付，在同一仓库内明确分开：
 
-- 需求细节见 [`PRD.md`](PRD.md) 的「AI 用量分析报告」一节。
-- 决策背景见 [`adr/0002-ai-analyzed-usage-report.md`](adr/0002-ai-analyzed-usage-report.md)。
-- 落地拆解见 [`TODO.md`](TODO.md) 的 **T1** 条目。
+1. **CLI** — 产出只读、语义化的全局用量数据（基于现有 `autofresh report`）。
+2. **skills** — 教 Claude Code / Codex 如何解读 CLI 产物，给出**对人有用的建议**。
+
+外加一条分发主线：通过 **npm**（`npx autofresh` / `npm i -g autofresh`）让安装更顺手。
+
+- 需求细节见 [`PRD.md`](PRD.md)：§3「AI 用量分析（skills 化）」、§5「分发与安装」。
+- 决策背景见下表 ADR。
+- 落地拆解见 [`TODO.md`](TODO.md)：**T1**（skills 化分析）、**T4**（npm 分发）。
+
+## ADR 索引
+
+| 编号 | 标题 | 状态 |
+| --- | --- | --- |
+| [0001](adr/0001-record-architecture-decisions.md) | 采用架构决策记录（ADR） | 已接受 |
+| [0002](adr/0002-ai-analyzed-usage-report.md) | AI 用量分析报告：脚本采集 + 本机模型分析 | 部分被 0004 取代 |
+| [0003](adr/0003-npm-distribution.md) | 通过 npm 分发，仓库内 CLI 与 skills 分开 | 提议中 |
+| [0004](adr/0004-skills-based-analysis.md) | skills 化分析：CLI 产出数据，skill 教 agent 给建议 | 提议中 |
 </content>
 </invoke>
