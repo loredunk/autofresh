@@ -1,0 +1,39 @@
+# Autofresh 文档
+
+本目录收录 autofresh 的产品与工程文档。约定如下：
+
+- **PRD（产品需求文档）** — 描述「要做什么、为什么做、做到什么程度」。见 [`PRD.md`](PRD.md)。
+- **ADR（架构决策记录）** — 记录「关键技术决策及其取舍」，一次决策一篇、只增不改。见 [`adr/`](adr/)。
+- **TODO（待办清单）** — 跟踪「接下来要落地的事项」，按优先级与状态滚动维护。见 [`TODO.md`](TODO.md)。
+
+## 文档地图
+
+| 文档 | 作用 | 何时读 / 何时写 |
+| --- | --- | --- |
+| [`PRD.md`](PRD.md) | 功能的目标、用户故事、范围与验收标准 | 立项 / 改需求时写；动手前读 |
+| [`adr/`](adr/) | 不可逆或影响面大的技术选型 | 做关键决策时新增一篇 |
+| [`TODO.md`](TODO.md) | 可执行的任务拆解与进度 | 每次推进后更新勾选 |
+
+## 当前主线
+
+产品分两块交付，在同一仓库内明确分开：
+
+1. **CLI** — 产出只读、语义化的全局用量数据（基于现有 `autofresh report`）。
+2. **skills** — 教 Claude Code / Codex 如何解读 CLI 产物，给出**对人有用的建议**。
+
+外加一条分发主线：通过 **npm**（`npx autofresh` / `npm i -g autofresh`）让安装更顺手。
+
+- 需求细节见 [`PRD.md`](PRD.md)：§3「AI 用量分析（skills 化）」、§5「分发与安装」。
+- 决策背景见下表 ADR。
+- 落地拆解见 [`TODO.md`](TODO.md)：**T1**（skills 化分析）、**T4**（npm 分发）。
+
+## ADR 索引
+
+| 编号 | 标题 | 状态 |
+| --- | --- | --- |
+| [0001](adr/0001-record-architecture-decisions.md) | 采用架构决策记录（ADR） | 已接受 |
+| [0002](adr/0002-ai-analyzed-usage-report.md) | AI 用量分析报告：脚本采集 + 本机模型分析 | 部分被 0004 取代 |
+| [0003](adr/0003-npm-distribution.md) | 通过 npm 分发，仓库内 CLI 与 skills 分开 | 提议中 |
+| [0004](adr/0004-skills-based-analysis.md) | skills 化分析：CLI 产出数据，skill 教 agent 给建议 | 提议中 |
+</content>
+</invoke>
