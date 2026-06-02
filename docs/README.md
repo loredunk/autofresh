@@ -21,11 +21,13 @@
 1. **CLI** — 产出只读、语义化的全局用量数据（基于现有 `autofresh report`）。
 2. **skills** — 教 Claude Code / Codex 如何解读 CLI 产物，给出**对人有用的建议**。
 
-外加一条分发主线：通过 **npm**（`npx autofresh` / `npm i -g autofresh`）让安装更顺手。
+skill 侧已上线 `skills/ai-usage-html-report/`，后续在其上**演进**：新增**会话 / 项目 / 全局
+三层分析**，并让建议**优先映射到产品原生特性**。外加一条分发主线：通过 **npm**
+（`npx autofresh` / `npm i -g autofresh`）让安装更顺手。
 
-- 需求细节见 [`PRD.md`](PRD.md)：§3「AI 用量分析（skills 化）」、§5「分发与安装」。
+- 需求细节见 [`PRD.md`](PRD.md)：§3「AI 用量分析」（含 §3.9 三层分析、§3.10 特性优先建议）、§5「分发与安装」。
 - 决策背景见下表 ADR。
-- 落地拆解见 [`TODO.md`](TODO.md)：**T1**（skills 化分析）、**T4**（npm 分发）。
+- 落地拆解见 [`TODO.md`](TODO.md)：**T1**（skills 化分析）、**T5**（三层分析）、**T6**（特性优先建议）、**T4**（npm 分发）。
 
 ## ADR 索引
 
@@ -35,5 +37,7 @@
 | [0002](adr/0002-ai-analyzed-usage-report.md) | AI 用量分析报告：脚本采集 + 本机模型分析 | 部分被 0004 取代 |
 | [0003](adr/0003-npm-distribution.md) | 通过 npm 分发，仓库内 CLI 与 skills 分开 | 提议中 |
 | [0004](adr/0004-skills-based-analysis.md) | skills 化分析：CLI 产出数据，skill 教 agent 给建议 | 提议中 |
+| [0005](adr/0005-tiered-analysis-and-signals.md) | 分层分析（会话/项目/全局）与信号选择 | 提议中 |
+| [0006](adr/0006-feature-first-recommendations.md) | 建议优先映射到产品特性（feature-first） | 提议中 |
 </content>
 </invoke>

@@ -13,7 +13,8 @@ autofresh 是一个跨平台（macOS / Linux）的 **Codex & Claude 用量保活
 1. **保活（已上线）**：在工作时段内按 `5h10m` 间隔自动触发 Codex / Claude 的轻量 ping，
    把 5 小时计费窗口「卡」在真正需要用的时段，减少额度浪费。
 2. **洞察（部分上线 → 规划增强）**：只读分析本机用量记录，输出 Token、成本、工具调用、
-   按仓库 / 时段的统计；下一步加入 **大模型语义分析与建议报告**。
+   按仓库 / 时段的统计；并由 skill 教 agent 做**分会话 / 项目 / 全局三层**的语义分析，给出
+   **特性优先**的建议（凡能用产品原生特性解决的就点名特性去解决）。
 
 目标用户：重度使用 Claude Code / Codex 的个人开发者，希望「花得值、用在刀刃上」。
 
@@ -26,11 +27,15 @@ autofresh 是一个跨平台（macOS / Linux）的 **Codex & Claude 用量保活
 | 设定保活计划 | `autofresh set 06:00 --target all` | 写入 launchd / crontab |
 | 查看 / 诊断计划 | `autofresh plan` / `doctor` | |
 | 手动触发 | `autofresh trigger` | 打印模型回复，确认保活生效 |
-| 本机 Codex 用量报告 | `autofresh report [--json]` | 只读 `~/.codex` rollout，输出 Token / 成本 / 工具 / 仓库 / 时段 |
+| 本机 Codex 用量报告 | `autofresh report [--json]` | 只读 `~/.codex` rollout，输出 Token / 成本 / 工具 / 仓库 / 时段 / 来源 / 语言 / git 习惯 / 配置扫描 |
+| 双平台 AI 使用报告 skill | `skills/ai-usage-html-report/` | 已上线：用 ccusage + `autofresh report --json` 数据，产出 Claude Code + Codex 双平台 HTML 报告、行为画像，并支持 Codex 高耗会话钻取 |
 
 `report --json` 已经是「脚本友好」的结构化输出（见
-[`internal/codexreport/report.go`](../internal/codexreport/report.go) 的 `Report` 结构体），
-是本次 AI 分析能力的天然数据底座。
+[`internal/codexreport/report.go`](../internal/codexreport/report.go) 的 `Report` 结构体，
+已含 `Repos / Hours / Sources / Languages / Git / Project / Codex` 等行为维度，由
+[`habits.go`](../internal/codexreport/habits.go) / [`language.go`](../internal/codexreport/language.go) /
+[`configscan.go`](../internal/codexreport/configscan.go) 产出），是 AI 分析能力的天然数据底座。
+本次增强是在**已上线的 `ai-usage-html-report` skill** 之上演进，而非从零新建。
 
 ### 现状边界（PRD 需尊重的约束）
 
@@ -77,9 +82,12 @@ report --json / --digest   ──喂──►   agent(Claude Code / Codex) 按 s
    （如 `cache_hit_rate=缓存输入/总输入，越高越省钱`），让 agent 无需额外上下文即可读懂。
    Codex 侧复用现有聚合；Claude Code 侧数据源待调研（TODO T1.1）。
 2. **skill**：用自然语言教 agent——何时运行哪条命令、如何解读各指标、输出怎样的建议。
-   skill 是产品的第二部分交付物，独立打包为 `@autofresh/skills`（见 §5、ADR 0003）。
+   skill 是产品的第二部分交付物，**在已上线的 `ai-usage-html-report` skill 上演进**
+   （非新建），独立打包为 `@autofresh/skills`（见 §5、ADR 0003）。
 3. **使用**：用户在自己常用的 Claude Code / Codex 里直接问「我的用量怎么样、怎么省」，
    agent 运行 CLI、按 skill 给出结论。分析所用模型天然就是用户当前 agent。
+
+> 本节方案进一步细化为 §3.9「三层分析与信号模型」与 §3.10「特性优先建议」。
 
 ### 3.5 skill 内容草案（待实现细化）
 
@@ -95,28 +103,69 @@ report --json / --digest   ──喂──►   agent(Claude Code / Codex) 按 s
 
 **In scope（本期）**
 - 增强 CLI 数据：让 `report --json`（及可能的 `--digest`）成为 agent 可直接消费的语义化数据。
-- 产出 `@autofresh/skills`：面向 Claude Code 与 Codex 的分析 skill 内容。
-- 隐私护栏写进 skill 指令（仅本机、估算成本、禁配额幻觉）。
+- 演进 `ai-usage-html-report` skill：新增**会话 / 项目 / 全局三个 scope**（§3.9、ADR 0005）。
+- **特性优先建议**：诊断结果优先映射到 Claude Code / Codex 原生特性（§3.10、ADR 0006）。
+- **会话 / 项目层可读 user prompt**（转述 + 脱敏）以诊断提示质量；全局层保持纯聚合。
+- 隐私护栏写进 skill 指令（仅本机、估算成本、禁配额幻觉、绝不读 assistant 回复）。
 
 **Out of scope（本期不做）**
 - 在二进制内调用 LLM / `autofresh advise` 子命令（已被 ADR 0004 取消）。
+- **读取 / 导出 assistant 回复文本**（任一 scope 都不读，见 §3.9 信号选择）。
 - 跨机器汇总用量（受 rollout 机器隔离约束）。
 - 真实账单 / 配额百分比（口径限制，见 §2 边界）。
-- skill 自动「改保活计划」（先只给建议，执行由人确认）。
+- skill 自动「改保活计划」或自动改配置（先只给建议，执行由人确认）。
 
 ### 3.7 验收标准
 
 - [ ] `report --json`（及 `--digest`，若引入）字段自描述、口径清晰，agent 无需额外上下文即可解读。
-- [ ] `@autofresh/skills` 提供至少一个可用 skill，能引导 agent 产出「结论 / 依据 / 行动项」的建议。
+- [ ] skill 能引导 agent 产出「结论 / 依据 / 行动项」的建议。
+- [ ] skill 支持**按 scope 切换**（会话 / 项目 / 全局），各 scope 数据定位正确（ADR 0005）。
+- [ ] 建议**含具体产品特性项**（如 CLAUDE.md / hooks / permission 设置 / effort 档位），而非仅泛泛说教（ADR 0006）。
+- [ ] **任一 scope 都不读取 / 不导出 assistant 回复**；**全局层不出现 user prompt 原文**；
+      会话 / 项目层若涉及 user prompt，均为转述 + 脱敏。
 - [ ] skill 中固化口径护栏，agent 不会输出配额百分比等越界结论。
 - [ ] 无用量数据时，skill 指引 agent 给出明确空态提示而非编造。
 - [ ] 数据/口径稳定：字段含义不随版本静默漂移（破坏性变更需版本标注）。
 
 ### 3.8 非功能性要求
 
-- **隐私优先**：CLI 默认只读、不外发；数据是否交给 agent 由用户自身操作决定，文档说明数据流向。
+- **隐私优先**：CLI 默认只读、不外发；分析只基于 user prompt / permission / tool 调用，
+  **绝不读 assistant 回复**；user prompt 仅在会话 / 项目层、转述 + 脱敏后使用，全局层纯聚合（§3.9、ADR 0005）。
 - **离线友好**：CLI 不为分析目的引入网络依赖；分析发生在用户已在用的 agent 侧。
 - **可测试**：CLI 的采集 / digest 逻辑与任何模型解耦，可在无模型环境下单测（沿用 `Build()`/`Run()` 分离）。
+
+### 3.9 三层分析与信号模型
+
+> 决策见 [`adr/0005-tiered-analysis-and-signals.md`](adr/0005-tiered-analysis-and-signals.md)。
+
+三个 scope 作为 `ai-usage-html-report` skill 的模式：
+
+| scope | 视角 | 数据定位 |
+| --- | --- | --- |
+| **会话级 session** | 当前这次会话 | 在会话中插入 skill 即时分析；agent 已持有当前会话上下文 |
+| **项目级 project** | 单个项目跨会话 | Claude Code：`~/.claude/projects/<cwd 编码目录>/`；Codex：按 repo/cwd 过滤 rollout |
+| **全局级 global** | 跨所有项目 / 时间窗口 | 复用 `collect_claude_behavior.py` + `autofresh report` |
+
+**信号选择**：分析只基于 **user prompt + permission + tool 调用**，**不读取 assistant 回复**
+（回复体量大、对「人如何驱动工具」诊断价值低，去掉后上下文显著变小，会话级「插入即分析」才可行）。
+
+**prompt 读取边界**：会话 / 项目层可读 user prompt（仅本机、用户发起、转述 + 脱敏、不逐字成片堆叠），
+复用 `references/session-prompt-review.md` 框架；全局层保持纯聚合（零 prompt 文本）。
+
+### 3.10 特性优先建议
+
+> 决策见 [`adr/0006-feature-first-recommendations.md`](adr/0006-feature-first-recommendations.md)。
+
+产品目的是帮用户**用好 Claude Code / Codex 的特性**，因此建议先映射到原生特性，再补习惯 / 提示类做法。
+代表性映射（非穷举，详见 ADR 0006）：
+
+- 重复加载 / 低缓存、长上下文 → CLAUDE.md / AGENTS.md、`@文件`引用、`/compact`、memory。
+- 工具循环 / 探索漂移 → plan mode、subagents、提前给路径 / 验收标准。
+- 改完不验证 → hooks 自动跑测试、AGENTS.md 固化测试命令。
+- 权限打断多 → `settings.json` 权限 allowlist / permission 模式；Codex `approval_policy` / `sandbox_mode`。
+- reasoning 占比高 / 贵 → Codex `model_reasoning_effort` / `model_verbosity`、简单任务换小模型、按需 extended thinking。
+
+给配置建议前须**联网核对最新官方文档**；skill 只建议、不自动改配置。
 
 ---
 

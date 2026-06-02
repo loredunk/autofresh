@@ -12,6 +12,9 @@
 >
 > **核心目标**：CLI 产出**语义化全局统计**，由 **skill** 教 Claude Code / Codex 解读并给出
 > 对人有用的建议。职责：CLI 出「料」，skill 出「解读」。
+>
+> **注**：skill 不是「待建」——本分支已上线 `skills/ai-usage-html-report/`，后续是**在其上演进**
+> （新增三个 scope 见 T5、特性优先建议见 T6）。
 
 ### T1.1 CLI 数据（出「料」）
 - [ ] 复用 `codexreport.Build()` 产出 Codex 侧聚合。
@@ -31,6 +34,35 @@
 ### T1.3 文档与验收
 - [ ] 在 README / README_EN 增补 skills 安装与使用说明。
 - [ ] 跑通 PRD §3.7 的全部验收清单。
+
+---
+
+## T5 · 三层分析（会话 / 项目 / 全局）（P0，主线）
+
+> 来源：[`PRD.md`](PRD.md) §3.9 · 决策：[`adr/0005-tiered-analysis-and-signals.md`](adr/0005-tiered-analysis-and-signals.md)
+>
+> **核心目标**：在 `ai-usage-html-report` skill 上新增三个 scope，信号限定为
+> user prompt + permission + tool 调用，**绝不读 assistant 回复**。
+
+- [ ] skill 新增 scope 维度：会话 / 项目 / 全局，可由参数 / 触发语选择。
+- [ ] **会话级**：定位「当前会话」（优先用 agent 已有上下文；否则最新 session jsonl / id，ADR 0005 OQ1）。
+- [ ] **项目级**：定位 `~/.claude/projects/<cwd 编码目录>/` 的全部会话；Codex 按 repo/cwd 过滤（复用 `session_drilldown.py --repo`）。
+- [ ] **全局级**：保持纯聚合（复用 `collect_claude_behavior.py` + `autofresh report`）。
+- [ ] 信号选择：只用 user prompt + permission + tool 调用；**不读 / 不导出 assistant 回复**。
+- [ ] prompt 边界：会话 / 项目层 user prompt 转述 + 脱敏（复用 `references/session-prompt-review.md`）；全局层零 prompt 文本。
+- [ ] 明确 permission 信号字段（ADR 0005 OQ2）、Codex 项目过滤口径（OQ3）。
+
+## T6 · 特性优先建议（P0，主线）
+
+> 来源：[`PRD.md`](PRD.md) §3.10 · 决策：[`adr/0006-feature-first-recommendations.md`](adr/0006-feature-first-recommendations.md)
+>
+> **核心目标**：诊断结果优先映射到 Claude Code / Codex 原生特性，再补习惯 / 提示类建议。
+
+- [ ] 把 `references/insight-patterns.md` 的 intervention 系统化为 **finding → feature 映射**。
+- [ ] 新增 / 扩充一份 feature-mapping 参考（覆盖 ADR 0006 D2 的代表性映射，并随特性演进维护）。
+- [ ] 建议排序：先点名特性（CLAUDE.md/AGENTS.md、subagents、hooks、plan mode、permission、effort/模型档位…），后习惯。
+- [ ] 强化「给配置建议前**联网核对官方文档**」（沿用并加硬现有 Analysis Guidance）。
+- [ ] 守住「只建议、不自动改配置」。
 
 ---
 
@@ -67,4 +99,5 @@
 ## 已完成
 - [x] 建立 `docs/`：PRD / ADR / TODO 体系（2026-06-02）。
 - [x] 规划 npm 分发与 skills 化分析（ADR 0003 / 0004，2026-06-02）。
+- [x] 规划三层分析与特性优先建议（ADR 0005 / 0006，2026-06-02）。
 </content>
